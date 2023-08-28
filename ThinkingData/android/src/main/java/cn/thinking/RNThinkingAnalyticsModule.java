@@ -1,21 +1,29 @@
 // Thinkingdata RN SDK v2.1.0
 package cn.thinkingdata;
 
+import android.text.TextUtils;
+
+import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
+import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMap;
-import cn.thinkingdata.android.ThinkingAnalyticsSDK;
-import cn.thinkingdata.android.TDUpdatableEvent;
-import cn.thinkingdata.android.TDOverWritableEvent;
-import cn.thinkingdata.android.TDFirstEvent;
+import com.facebook.react.bridge.ReadableMapKeySetIterator;
+import com.facebook.react.bridge.ReadableType;
+import com.facebook.react.bridge.WritableMap;
 
+import cn.thinkingdata.android.ThinkingAnalyticsSDK;
+import cn.thinkingdata.engine.ThinkingGameEngineApi;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
-import java.util.TimeZone;
+import java.util.Map;
 
 public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
 
@@ -24,6 +32,8 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     }
 
     private static final String MODULE_NAME = "RNThinkingAnalyticsModule";
+
+    private final ThinkingGameEngineApi mApi = new ThinkingGameEngineApi();
 
     @Override
     public String getName() {
@@ -44,38 +54,84 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
         return json;
     }
 
+
+    @ReactMethod
+    public void init(ReadableMap readableMap, String libVersion) {
+        try {
+            JSONObject json = new JSONObject();
+            String appid = readableMap.getString("appid");
+            String serverUrl = readableMap.getString("serverUrl");
+            if (TextUtils.isEmpty(appid) || TextUtils.isEmpty(serverUrl)) return;
+            json.put("appId",appid);
+            json.put("serverUrl",serverUrl);
+
+            if (readableMap.hasKey("timeZone")) {
+                String timeZoneId = readableMap.getString("timeZone");
+                json.put("timeZone",timeZoneId);
+            }
+
+            if (readableMap.hasKey("mode")) {
+                String mode = readableMap.getString("mode");
+                if (TextUtils.equals(mode, "debug")) {
+                    json.put("mode",1);
+                } else if (TextUtils.equals(mode, "debugOnly")) {
+                    json.put("mode",2);
+                } else {
+                    json.put("mode",0);
+                }
+            }
+
+            if (readableMap.hasKey("enableEncrypt")) {
+                boolean enableEncrypt = readableMap.getBoolean("enableEncrypt");
+                json.put("enableEncrypt",enableEncrypt);
+            }
+
+            if (readableMap.hasKey("secretKey")) {
+                JSONObject secretJson = new JSONObject();
+                ReadableMap secretKey = readableMap.getMap("secretKey");
+                if (secretKey != null) {
+                    secretJson.put("publicKey",secretKey.getString("publicKey"));
+                    secretJson.put("version",secretKey.getInt("version"));
+                    secretJson.put("symmetricEncryption",secretKey.getString("symmetricEncryption"));
+                    secretJson.put("asymmetricEncryption",secretKey.getString("asymmetricEncryption"));
+                    json.put("secretKey",secretJson);
+                }
+            }
+
+            if (readableMap.hasKey("enableLog")) {
+                boolean enableLog = readableMap.getBoolean("enableLog");
+                mApi.enableTrackLog(enableLog);
+            }
+            mApi.setCustomerLibInfo("ReactNative", libVersion);
+            mApi.sharedInstance(getReactApplicationContext(),json.toString());
+        }catch (Exception e){
+            
+        }
+    }
+
+
     @ReactMethod
     public void track(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId",readableMap.getString("appid"));
             }
-            String eventName = null;
             if (readableMap.hasKey("eventName")) {
-                eventName = readableMap.getString("eventName");
+                json.put("eventName",readableMap.getString("eventName"));
             }
-            JSONObject properties = null;
             if (readableMap.hasKey("properties")) {
-                properties = convertToJSONObject(readableMap.getMap("properties"));
+                json.put("properties",convertToJSONObject(readableMap.getMap("properties")));
             }
             if (readableMap.hasKey("time")) {
                 double time = readableMap.getDouble("time");
-                Date date = new Date((long) (time));
-                TimeZone tz = null;
+                json.put("time",time);
                 if (readableMap.hasKey("timeZone")) {
                     String timeZone = readableMap.getString("timeZone");
-                    tz = TimeZone.getTimeZone(timeZone);
+                    json.put("timeZone",timeZone);
                 }
-
-                if (null == tz) {
-                    ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).track(eventName, properties, date);
-                } else {
-                    ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).track(eventName, properties, date, tz);
-                }
-            } else {
-                ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).track(eventName, properties);
             }
+            mApi.track(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -84,43 +140,30 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void trackUpdate(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId", readableMap.getString("appid"));
             }
-            String eventName = null;
             if (readableMap.hasKey("eventName")) {
-                eventName = readableMap.getString("eventName");
+                json.put("eventName", readableMap.getString("eventName"));
             }
-            JSONObject properties = null;
             if (readableMap.hasKey("properties")) {
-                properties = convertToJSONObject(readableMap.getMap("properties"));
+                json.put("properties",convertToJSONObject(readableMap.getMap("properties")));
             }
-            String eventId = null;
             if (readableMap.hasKey("eventId")) {
-                eventId = readableMap.getString("eventId");
+                json.put("eventId",readableMap.getString("eventId"));
             }
+            json.put("type",1);
 
-            TDUpdatableEvent updatableEvent = new TDUpdatableEvent(eventName, properties, eventId);
             if (readableMap.hasKey("time")) {
                 double time = readableMap.getDouble("time");
-                Date date = new Date((long) (time));
-                TimeZone tz = null;
+                json.put("time",time);
                 if (readableMap.hasKey("timeZone")) {
                     String timeZone = readableMap.getString("timeZone");
-                    tz = TimeZone.getTimeZone(timeZone);
+                    json.put("timeZone",timeZone);
                 }
-
-                if (null == tz) {
-                    updatableEvent.setEventTime(date);
-                    ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).track(updatableEvent);
-                } else {
-                    updatableEvent.setEventTime(date, tz);
-                    ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).track(updatableEvent);
-                }
-            } else {
-                ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).track(updatableEvent);
             }
+            mApi.trackEvent(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -129,43 +172,29 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void trackOverwrite(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId", readableMap.getString("appid"));
             }
-            String eventName = null;
             if (readableMap.hasKey("eventName")) {
-                eventName = readableMap.getString("eventName");
+                json.put("eventName", readableMap.getString("eventName"));
             }
-            JSONObject properties = null;
             if (readableMap.hasKey("properties")) {
-                properties = convertToJSONObject(readableMap.getMap("properties"));
+                json.put("properties", convertToJSONObject(readableMap.getMap("properties")));
             }
-            String eventId = null;
             if (readableMap.hasKey("eventId")) {
-                eventId = readableMap.getString("eventId");
+                json.put("eventId",readableMap.getString("eventId"));
             }
-
-            TDOverWritableEvent overWritableEvent = new TDOverWritableEvent(eventName, properties, eventId);
+            json.put("type",2);
             if (readableMap.hasKey("time")) {
                 double time = readableMap.getDouble("time");
-                Date date = new Date((long) (time));
-                TimeZone tz = null;
+                json.put("time",time);
                 if (readableMap.hasKey("timeZone")) {
                     String timeZone = readableMap.getString("timeZone");
-                    tz = TimeZone.getTimeZone(timeZone);
+                    json.put("timeZone",timeZone);
                 }
-
-                if (null == tz) {
-                    overWritableEvent.setEventTime(date);
-                    ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).track(overWritableEvent);
-                } else {
-                    overWritableEvent.setEventTime(date, tz);
-                    ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).track(overWritableEvent);
-                }
-            } else {
-                ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).track(overWritableEvent);
             }
+            mApi.trackEvent(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -174,44 +203,29 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void trackFirstEvent(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId", readableMap.getString("appid"));
             }
-            String eventName = null;
             if (readableMap.hasKey("eventName")) {
-                eventName = readableMap.getString("eventName");
+                json.put("eventName", readableMap.getString("eventName"));
             }
-            JSONObject properties = null;
             if (readableMap.hasKey("properties")) {
-                properties = convertToJSONObject(readableMap.getMap("properties"));
+                json.put("properties",convertToJSONObject(readableMap.getMap("properties")));
             }
-            String eventId = null;
             if (readableMap.hasKey("eventId")) {
-                eventId = readableMap.getString("eventId");
+                json.put("eventId",readableMap.getString("eventId"));
             }
-
-            TDFirstEvent firstEvent = new TDFirstEvent(eventName, properties);
-            firstEvent.setFirstCheckId(eventId);
+            json.put("type",0);
             if (readableMap.hasKey("time")) {
                 double time = readableMap.getDouble("time");
-                Date date = new Date((long) (time));
-                TimeZone tz = null;
+                json.put("time",time);
                 if (readableMap.hasKey("timeZone")) {
                     String timeZone = readableMap.getString("timeZone");
-                    tz = TimeZone.getTimeZone(timeZone);
+                    json.put("timeZone",timeZone);
                 }
-
-                if (null == tz) {
-                    firstEvent.setEventTime(date);
-                    ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).track(firstEvent);
-                } else {
-                    firstEvent.setEventTime(date, tz);
-                    ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).track(firstEvent);
-                }
-            } else {
-                ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).track(firstEvent);
             }
+            mApi.trackEvent(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -220,15 +234,14 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void timeEvent(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId",readableMap.getString("appid"));
             }
-            String eventName = null;
             if (readableMap.hasKey("eventName")) {
-                eventName = readableMap.getString("eventName");
+                json.put("eventName",readableMap.getString("eventName"));
             }
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).timeEvent(eventName);
+            mApi.timeEvent(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -237,12 +250,13 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void login(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId",readableMap.getString("appid"));
             }
             String loginId = readableMap.getString("loginId");
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).login(loginId);
+            json.put("loginId",loginId);
+            mApi.login(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -251,11 +265,11 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void logout(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId",readableMap.getString("appid"));
             }
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).logout();
+            mApi.logout(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -264,15 +278,14 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void userSet(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId", readableMap.getString("appid"));
             }
-            JSONObject properties = null;
             if (readableMap.hasKey("properties")) {
-                properties = convertToJSONObject(readableMap.getMap("properties"));
+                json.put("properties", convertToJSONObject(readableMap.getMap("properties")));
             }
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).user_set(properties);
+            mApi.userSet(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -281,15 +294,15 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void userUnset(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId",readableMap.getString("appid"));
             }
-            String properties = null;
             if (readableMap.hasKey("properties")) {
-                properties = readableMap.getString("properties");
+                JSONArray jsonArray = new JSONArray();
+                json.put("properties",jsonArray.put(readableMap.getString("properties")));
             }
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).user_unset(properties);
+            mApi.userUnset(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -298,15 +311,14 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void userSetOnce(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId", readableMap.getString("appid"));
             }
-            JSONObject properties = null;
             if (readableMap.hasKey("properties")) {
-                properties = convertToJSONObject(readableMap.getMap("properties"));
+                json.put("properties", convertToJSONObject(readableMap.getMap("properties")));
             }
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).user_setOnce(properties);
+            mApi.userSetOnce(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -315,15 +327,14 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void userAdd(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId", readableMap.getString("appid"));
             }
-            JSONObject properties = null;
             if (readableMap.hasKey("properties")) {
-                properties = convertToJSONObject(readableMap.getMap("properties"));
+                json.put("properties", convertToJSONObject(readableMap.getMap("properties")));
             }
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).user_add(properties);
+            mApi.userAdd(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -332,11 +343,11 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void userDel(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId",readableMap.getString("appid"));
             }
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).user_delete();
+            mApi.userDel(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -345,15 +356,14 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void userAppend(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId", readableMap.getString("appid"));
             }
-            JSONObject properties = null;
             if (readableMap.hasKey("properties")) {
-                properties = convertToJSONObject(readableMap.getMap("properties"));
+                json.put("properties",convertToJSONObject(readableMap.getMap("properties")));
             }
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).user_append(properties);
+            mApi.userAppend(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -362,15 +372,14 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void setSuperProperties(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId", readableMap.getString("appid"));
             }
-            JSONObject properties = null;
             if (readableMap.hasKey("properties")) {
-                properties = convertToJSONObject(readableMap.getMap("properties"));
+                json.put("properties", convertToJSONObject(readableMap.getMap("properties")));
             }
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).setSuperProperties(properties);
+            mApi.setSuperProperties(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -379,15 +388,14 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void unsetSuperProperty(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId", readableMap.getString("appid"));
             }
-            String properties = null;
             if (readableMap.hasKey("properties")) {
-                properties = readableMap.getString("properties");
+                json.put("property", readableMap.getString("properties"));
             }
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).unsetSuperProperty(properties);
+            mApi.unsetSuperProperty(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -396,11 +404,11 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void clearSuperProperties(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId", readableMap.getString("appid"));
             }
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).clearSuperProperties();
+            mApi.clearSuperProperties(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -409,15 +417,14 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void identify(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId", readableMap.getString("appid"));
             }
-            String distinctId = null;
             if (readableMap.hasKey("distinctId")) {
-                distinctId = readableMap.getString("distinctId");
+                json.put("distinctId", readableMap.getString("distinctId"));
             }
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).identify(distinctId);
+            mApi.identify(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -426,11 +433,11 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void flush(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId",readableMap.getString("appid"));
             }
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).flush();
+            mApi.flush(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -439,15 +446,20 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void enableTracking(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId",readableMap.getString("appid"));
             }
-            Boolean enableTracking = false;
+            boolean enableTracking = false;
             if (readableMap.hasKey("enableTracking")) {
                 enableTracking = readableMap.getBoolean("enableTracking");
+                if (enableTracking) {
+                    json.put("status", "normal");
+                } else {
+                    json.put("status", "pause");
+                }
             }
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).enableTracking(enableTracking);
+            mApi.setTrackStatus(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -456,11 +468,12 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void optInTracking(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId",readableMap.getString("appid"));
             }
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).optInTracking();
+            json.put("status", "normal");
+            mApi.setTrackStatus(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -469,11 +482,12 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void optOutTracking(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId",readableMap.getString("appid"));
             }
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).optOutTracking();
+            json.put("status", "stop");
+            mApi.setTrackStatus(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -495,30 +509,31 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void enableAutoTrack(ReadableMap readableMap) {
         try {
-            String appid = null;
+            JSONObject json = new JSONObject();
             if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
+                json.put("appId",readableMap.getString("appid"));
             }
             ReadableMap autoTrackType = null;
             if (readableMap.hasKey("autoTrackType")) {
                 autoTrackType = readableMap.getMap("autoTrackType");
             }
+            if(autoTrackType == null) return;
 
-            List<ThinkingAnalyticsSDK.AutoTrackEventType> eventTypeList = new ArrayList<>();
+            JSONArray jsonArray = new JSONArray();
             if (autoTrackType.hasKey("appStart")) {
-                eventTypeList.add(ThinkingAnalyticsSDK.AutoTrackEventType.APP_START);
+                jsonArray.put("appStart");
             }
             if (autoTrackType.hasKey("appEnd")) {
-                eventTypeList.add(ThinkingAnalyticsSDK.AutoTrackEventType.APP_END);
+                jsonArray.put("appEnd");
             }
             if (autoTrackType.hasKey("appViewCrash")) {
-                eventTypeList.add(ThinkingAnalyticsSDK.AutoTrackEventType.APP_CRASH);
+                jsonArray.put("appCrash");
             }
             if (autoTrackType.hasKey("appInstall")) {
-                eventTypeList.add(ThinkingAnalyticsSDK.AutoTrackEventType.APP_INSTALL);
+                jsonArray.put("appInstall");
             }
-
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).enableAutoTrack(eventTypeList);
+            json.put("autoTrack",jsonArray);
+            mApi.enableAutoTrack(json.toString());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -531,7 +546,7 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
             if (readableMap.hasKey("timeStampMillis")) {
                 timeStampMillis = readableMap.getDouble("timeStampMillis");
             }
-            ThinkingAnalyticsSDK.calibrateTime((long)timeStampMillis);
+            mApi.calibrateTime(( long ) timeStampMillis);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -544,10 +559,240 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
             if (readableMap.hasKey("ntp_server")) {
                 ntp_server = readableMap.getString("ntp_server");
             }
-            ThinkingAnalyticsSDK.calibrateTimeWithNtp(ntp_server);
+            mApi.calibrateTimeWithNtp(ntp_server);
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    @ReactMethod
+    public void enableThirdPartySharing(ReadableMap readableMap){
+        try {
+            JSONObject json = new JSONObject();
+            String appid = readableMap.getString("appid");
+            if(TextUtils.isEmpty(appid)) return;
+            json.put("appId",appid);
+            if (readableMap.hasKey("types")) {
+                ReadableArray shareTypes = readableMap.getArray("types");
+                if (null == shareTypes) return;
+                JSONArray jsonArray = new JSONArray();
+                for (int i = 0; i < shareTypes.size(); i++) {
+                    switch (shareTypes.getString(i)) {
+                        case "AppsFlyer":
+                            jsonArray.put("AppsFlyer");
+                            break;
+                        case "IronSource":
+                            jsonArray.put("IronSource");
+                            break;
+                        case "Adjust":
+                            jsonArray.put("Adjust");
+                            break;
+                        case "Branch":
+                            jsonArray.put("Branch");
+                            break;
+                        case "TopOn":
+                            jsonArray.put("TopOn");
+                            break;
+                        case "Tracking":
+                            jsonArray.put("Tracking");
+                            break;
+                        case "TradPlus":
+                            jsonArray.put("TradPlus");
+                            break;
+                    }
+                }
+                json.put("types",jsonArray);
+            } else if (readableMap.hasKey("type")) {
+                String type = readableMap.getString("type");
+                if (type == null) return;
+                ReadableMap maps = readableMap.getMap("params");
+                json.put("params",convertToJSONObject(maps));
+                json.put("type",type);
+            }
+            mApi.enableThirdPartySharing(json.toString());
+        }catch (Exception e){
+
+        }
+    }
+
+    @ReactMethod
+    public void userUniqAppend(ReadableMap readableMap) {
+        try {
+            JSONObject json = new JSONObject();
+            String appid = readableMap.getString("appid");
+            if (TextUtils.isEmpty(appid)) return;
+            json.put("appId", appid);
+            if (readableMap.hasKey("properties")) {
+                json.put("properties", convertToJSONObject(readableMap.getMap("properties")));
+            }
+            mApi.userUniqAppend(json.toString());
+        } catch (Exception e) {
+
+        }
+    }
+
+    @ReactMethod
+    public void setTrackStatus(ReadableMap readableMap) {
+        try {
+            JSONObject json = new JSONObject();
+            String appid = readableMap.getString("appid");
+            if (TextUtils.isEmpty(appid)) return;
+            json.put("appId",appid);
+            String status = readableMap.getString("status");
+            json.put("status",status);
+            mApi.setTrackStatus(json.toString());
+        } catch (Exception e) {
+
+        }
+    }
+
+    @ReactMethod
+    public void getPresetProperties(ReadableMap readableMap, Promise promise){
+        try {
+            JSONObject json = new JSONObject();
+            String appid = readableMap.getString("appid");
+            json.put("appId",appid);
+            String properties = mApi.getPresetProperties(json.toString());
+            promise.resolve(convertToMap(new JSONObject(properties)));
+        }catch (Exception e){
+            promise.resolve(null);
+        }
+    }
+
+    @ReactMethod
+    public void getSuperProperties(ReadableMap readableMap, Promise promise){
+        try {
+            JSONObject json = new JSONObject();
+            String appid = readableMap.getString("appid");
+            json.put("appId",appid);
+            String properties = mApi.getSuperProperties(json.toString());
+            promise.resolve(convertToMap(new JSONObject(properties)));
+        }catch (Exception e){
+            promise.resolve(null);
+        }
+    }
+
+    @ReactMethod
+    public void getDistinctId(ReadableMap readableMap, Promise promise) {
+        try {
+            JSONObject json = new JSONObject();
+            String appid = readableMap.getString("appid");
+            json.put("appId",appid);
+            String distinctId = mApi.getDistinctId(json.toString());
+            promise.resolve(distinctId);
+        } catch (Exception e) {
+            promise.resolve(null);
+        }
+    }
+
+    @ReactMethod
+    public void getDeviceId(ReadableMap readableMap, Promise promise){
+        try {
+            JSONObject json = new JSONObject();
+            String appid = readableMap.getString("appid");
+            json.put("appId",appid);
+            String deviceId = mApi.getDeviceId(json.toString());
+            promise.resolve(deviceId);
+        } catch (Exception e) {
+            promise.resolve(null);
+        }
+    }
+
+
+    @ReactMethod
+    public void setAutoTrackProperties(ReadableMap readableMap) {
+        try {
+            JSONObject json = new JSONObject();
+            String appid = readableMap.getString("appid");
+            if (TextUtils.isEmpty(appid)) return;
+            json.put("appId",appid);
+            if (readableMap.hasKey("types") && readableMap.hasKey("properties")) {
+                ReadableMap mapProperties = readableMap.getMap("properties");
+                json.put("properties",convertToJSONObject(mapProperties));
+                ReadableArray autoTrack = readableMap.getArray("types");
+                JSONArray jsonArray = new JSONArray();
+                if (null != autoTrack) {
+                    for (int i = 0; i < autoTrack.size(); i++) {
+                        if (TextUtils.equals(autoTrack.getString(i), "appStart")) {
+                            jsonArray.put("appStart");
+                        } else if (TextUtils.equals(autoTrack.getString(i), "appEnd")) {
+                            jsonArray.put("appEnd");
+                        } else if (TextUtils.equals(autoTrack.getString(i), "appInstall")) {
+                            jsonArray.put("appInstall");
+                        } else if (TextUtils.equals(autoTrack.getString(i), "appViewCrash")) {
+                            jsonArray.put("appCrash");
+                        }
+                    }
+                    if(jsonArray.length() >0){
+                        json.put("autoTrack",jsonArray);
+                        mApi.setAutoTrackProperties(json.toString());
+                    }
+                }
+            }
+        } catch (Exception e) {
+
+        }
+    }
+
+    private WritableMap convertToMap(JSONObject json) {
+        if (json == null || json.length() == 0) {
+            return null;
+        }
+        WritableMap writableMap = Arguments.createMap();
+        Iterator<String> it = json.keys();
+        while(it.hasNext()){
+            try {
+                String key = it.next();
+                writableMap.putString(key, json.optString(key));
+            } catch (Exception e) {
+
+            }
+        }
+        return writableMap;
+    }
+
+    private Map<String, Object> readMapToMap(ReadableMap map) {
+        Map<String, Object> params = new HashMap<>();
+        ReadableMapKeySetIterator iterator = map.keySetIterator();
+        while (iterator.hasNextKey()) {
+            String key = iterator.nextKey();
+            if (map.getType(key) == ReadableType.Map) {
+                ReadableMap newMap = map.getMap(key);
+                if (null != newMap) {
+                    params.put(key, readMapToMap(newMap));
+                }
+            } else if (map.getType(key) == ReadableType.String) {
+                params.put(key, map.getString(key));
+            } else if (map.getType(key) == ReadableType.Boolean) {
+                params.put(key, map.getBoolean(key));
+            } else if (map.getType(key) == ReadableType.Number) {
+                params.put(key, map.getDouble(key));
+            } else if (map.getType(key) == ReadableType.Array) {
+                ReadableArray newArray = map.getArray(key);
+                if(null != newArray) {
+                    params.put(key, readArrayToList(newArray));
+                }
+            }
+        }
+        return params;
+    }
+
+    private List<Object> readArrayToList(ReadableArray array) {
+        List<Object> list = new ArrayList<>();
+        for (int i = 0; i < array.size(); i++) {
+            if (array.getType(i) == ReadableType.Map) {
+                list.add(readMapToMap(array.getMap(i)));
+            } else if (array.getType(i) == ReadableType.String) {
+                list.add(array.getString(i));
+            } else if (array.getType(i) == ReadableType.Boolean) {
+                list.add(array.getBoolean(i));
+            } else if (array.getType(i) == ReadableType.Number) {
+                list.add(array.getDouble(i));
+            } else if (array.getType(i) == ReadableType.Array) {
+                list.add(readArrayToList(array.getArray(i)));
+            }
+        }
+        return list;
     }
 
 }

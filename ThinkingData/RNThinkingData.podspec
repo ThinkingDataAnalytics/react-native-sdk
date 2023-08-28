@@ -1,7 +1,7 @@
 
 Pod::Spec.new do |s|
   s.name         = "RNThinkingData"
-  s.version      = "1.0"
+  s.version      = "3.0.0-beta.1"
   s.summary      = "RNThinkingData"
   s.description  = <<-DESC
                   RNThinkingData
@@ -10,13 +10,12 @@ Pod::Spec.new do |s|
   s.license      = "MIT"
   # s.license      = { :type => "MIT", :file => "FILE_LICENSE" }
   s.author             = { "author" => "author@domain.cn" }
-  s.platform     = :ios, "7.0"
+  s.platform     = :ios, "8.0"
   s.source       = { :git => "https://github.com/author/RNThinkingData.git", :tag => "master" }
   s.source_files  = "ios/**/*.{h,m}"
   s.requires_arc = true
   s.dependency "React"
-  s.dependency "ThinkingSDK"
-  #s.dependency "others"
+  s.dependency "TAGameEngine", '0.4.0'
 
 end
 

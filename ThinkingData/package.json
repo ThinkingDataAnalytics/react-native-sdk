@@ -1,9 +1,8 @@
-
 {
   "name": "react-native-thinking-data",
-  "version": "2.1.1",
+  "version": "3.0.0-beta.1",
   "description": "",
-  "main": "index.js",
+  "main": "TDAnalytics.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -11,8 +10,5 @@
     "react-native"
   ],
   "author": "",
-  "license": "",
-  "peerDependencies": {
-    "react-native": "^0.41.2"
-  }
+  "license": ""
 }

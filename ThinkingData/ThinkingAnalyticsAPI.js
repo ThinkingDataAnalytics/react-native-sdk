@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { RNThinkingAnalyticsModule } = NativeModules;
 
-const TESDKVERSION = '2.4.6';
+const TESDKVERSION = '3.0.0';
 
 const AutoTrackEventType = {
     APP_START: 'appStart',

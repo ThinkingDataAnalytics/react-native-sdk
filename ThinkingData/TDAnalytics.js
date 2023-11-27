@@ -207,7 +207,7 @@ class TDAnalytics{
      * @property {Object} properties options.properties track event  properties,required
      * @property {String} appId options.appId app id,optional
      */
-    static enableAutoTrack(options = {}){
+    static enableAutoTrackWithProperties(options = {}){
         var appId = options['appId'];
         var autoTrackEventType = options['autoTrackTypes'];
         var properties = options['properties'];

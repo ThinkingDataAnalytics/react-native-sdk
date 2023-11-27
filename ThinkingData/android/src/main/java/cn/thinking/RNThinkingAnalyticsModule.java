@@ -14,7 +14,7 @@ import com.facebook.react.bridge.ReadableMapKeySetIterator;
 import com.facebook.react.bridge.ReadableType;
 import com.facebook.react.bridge.WritableMap;
 
-import cn.thinkingdata.android.ThinkingAnalyticsSDK;
+import cn.thinkingdata.analytics.ThinkingAnalyticsSDK;
 import cn.thinkingdata.engine.ThinkingGameEngineApi;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -49,7 +49,11 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
         try {
             json = new JSONObject(properties.toString()).getJSONObject("NativeMap");
         } catch (Exception e) {
-            e.printStackTrace();
+            try{
+                json = new JSONObject(properties.toString());
+            }catch(Exception e1){
+
+            }
         }
         return json;
     }

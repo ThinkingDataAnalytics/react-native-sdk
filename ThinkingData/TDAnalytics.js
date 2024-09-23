@@ -1,5 +1,6 @@
 
 import thinkingdata, { AutoTrackEventType, TAThirdPartyShareType, TATrackStatus } from "./ThinkingAnalyticsAPI";
+
 const TDAutoTrackEventType = {
     APP_START:  1,
     APP_END: 1 << 1,
@@ -21,6 +22,21 @@ const TDThirdPartyType = {
     TRACKING: 1 << 5,
     TRAD_PLUS: 1 << 6
 }
+
+const TDEventType = {
+    Track: "track",
+    TrackFirst: "track_first",
+    TrackUpdate: "track_update",
+    TrackOverwrite: "track_overwrite",
+    UserDel: "user_del",
+    UserAdd: "user_add",
+    UserSet: "user_set",
+    UserSetOnce: "user_setOnce",
+    UserUnset: "user_unset",
+    UserAppend: "user_append",
+    UserUniqAppend: "user_uniq_append",
+};
+
 /**
  * @class
  */
@@ -540,6 +556,140 @@ class TDAnalytics{
         }
     }
 
+    /**
+     * h5 event handler. 
+     * @param {String} eventData event data,required
+     */
+    static h5ClickHandler(eventData) {
+        if (!eventData) return;
+        const eventMap = JSON.parse(eventData);
+        const dataArr = eventMap['data'];
+
+        if (!Array.isArray(dataArr) || dataArr.length === 0) {
+            return;
+        }
+
+        const dataInfo = dataArr[0];
+        if (!dataInfo) {
+            return;
+        }
+
+        let type = dataInfo['#type'];
+        const eventName = dataInfo['#event_name'];
+        const time = dataInfo['#time'];
+        let properties = dataInfo['properties'];
+
+        let extraID;
+        if (type === TDEventType.Track) {
+            extraID = dataInfo['#first_check_id'];
+        if (extraID) {
+            type = TDEventType.TrackFirst;
+        }
+        } else {
+            extraID = dataInfo['#event_id'];
+        }
+
+        properties = this._cleanProperties(properties);
+        this._h5track(eventName, extraID, properties, type, time);
+    }
+
+    static _h5track(eventName, extraID, properties, type, time) {
+        if (this._isTrackEvent(type)) {
+            const dateTime = new Date(time);
+            let timeZone;
+            if (properties['#zone_offset']) {
+              const zoneOffset = properties['#zone_offset'];
+              const diffHours = -dateTime.getTimezoneOffset() / 60 - zoneOffset;
+              const hours = Math.floor(diffHours);
+              const minutes = Math.floor((diffHours - hours) * 60);
+              dateTime.setHours(dateTime.getHours() + hours);
+              dateTime.setMinutes(dateTime.getMinutes() + minutes);
+              timeZone = this._formatTimeZone(zoneOffset);
+            }
+            if (type === TDEventType.Track) {
+                this.track({
+                    eventName,
+                    properties,
+                    time: dateTime.getTime(),
+                    timeZone
+                    });
+                return;
+            }
+            const eventModel = {
+                eventName,
+                properties,
+                eventId: extraID || "",
+                time: dateTime.getTime(),
+                timeZone
+            };
+            switch (type) {
+                case TDEventType.TrackFirst:
+                    this.trackFirst(eventModel);
+                    break;
+                case TDEventType.TrackUpdate:
+                    this.trackUpdate(eventModel);
+                    break;
+                case TDEventType.TrackOverwrite:
+                    this.trackOverwrite(eventModel);
+                    break;
+                default:
+                    throw new Error(`Invalid event type: ${type}`);
+            }
+        } else {
+            this._handleUserEvent(type, properties);
+        }
+      }
+      
+      static _handleUserEvent(type, properties) {
+        switch (type) {
+            case TDEventType.UserDel:
+            this.userDelete();
+            break;
+          case TDEventType.UserAdd:
+            this.userAdd(properties);
+            break;
+          case TDEventType.UserSet:
+            this.userSet(properties);
+            break;
+          case TDEventType.UserSetOnce:
+            this.userSetOnce(properties);
+            break;
+          case TDEventType.UserUnset:
+            this.userUnset(Object.keys(properties)[0]);
+            break;
+          case TDEventType.UserAppend:
+            this.userAppend(properties);
+            break;
+          case TDEventType.UserUniqAppend:
+            this.userUniqAppend(properties);
+            break;
+        }
+      }
+      
+      static _formatTimeZone(hours) {
+        const sign = hours >= 0 ? '+' : '-';
+        const hourAbs = Math.abs(hours);
+        const minutes = Math.floor((hourAbs - Math.floor(hourAbs)) * 60);
+        const hourPart = `${Math.floor(hourAbs).toString().padStart(2, '0')}`;
+        const minutePart = `${minutes.toString().padStart(2, '0')}`;
+      
+        return `GMT${sign}${hourPart}:${minutePart}`;
+      }
+      
+      static _isTrackEvent(eventType) {
+        return [
+          TDEventType.Track,
+          TDEventType.TrackFirst,
+          TDEventType.TrackUpdate,
+          TDEventType.TrackOverwrite,
+        ].includes(eventType);
+      }
+      
+      static _cleanProperties(properties) {
+        const keysToRemove = ['#account_id', '#distinct_id', '#device_id', '#lib', '#lib_version', '#screen_height', '#screen_width'];
+        keysToRemove.forEach(key => delete properties[key]);
+        return properties;
+      }
 }
 
 export { TDAutoTrackEventType,TDTrackStatus,TDThirdPartyType};

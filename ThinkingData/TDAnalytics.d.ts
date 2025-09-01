@@ -105,18 +105,13 @@ declare class TDAnalytics {
      * @param {String} eventName event name,required
      * @param {String} appId app id,optional
      */
-    static timeEvent(eventName: string, appId: string): void;
+    static timeEvent(eventName: string, appId?: string): void;
     /**
      * Enable the auto tracking function.
      * @param {TDAutoTrackEventType} autoTrackEventType Indicates the type of the automatic collection event to be enabled,required
      * @param {String} appId app id,optional
      */
-    static enableAutoTrack(autoTrackEventType: {
-        APP_START: number;
-        APP_END: number;
-        APP_CRASH: number;
-        APP_INSTALL: number;
-    }, appId: string): void;
+    static enableAutoTrack(autoTrackEventType: TDAutoTrackEventType, appId?: string): void;
     /**
      * Enable the auto tracking function with properties
      * @param {Object} options  autoTrack infomations
@@ -131,106 +126,106 @@ declare class TDAnalytics {
      * @param {Object} properties user properties,required
      * @param {String} appId app id,optional
      */
-    static userSet(properties: any, appId: string): void;
+    static userSet(properties: any, appId?: string): void;
     /**
      * Sets a single user attribute, ignoring the new attribute value if the attribute already exists.
      * @param {Object} properties user properties,required
      * @param {String} appId app id,optional
      */
-    static userSetOnce(properties: any, appId: string): void;
+    static userSetOnce(properties: any, appId?: string): void;
     /**
      * Reset user properties.
      * @param {String} property user property,required
      * @param {String} appId app id,optional
      */
-    static userUnset(property: string, appId: string): void;
+    static userUnset(property: string, appId?: string): void;
     /**
      * Only one attribute is set when the user attributes of a numeric type are added.
      * @param {object} properties user properties,required
      * @param {String} appId app id,optional
      */
-    static userAdd(properties: object, appId: string): void;
+    static userAdd(properties: object, appId?: string): void;
     /**
      * Append a user attribute of the List type.
      * @param {Object} properties user properties,required
      * @param {String} appId app id,optional
      */
-    static userAppend(properties: any, appId: string): void;
+    static userAppend(properties: any, appId?: string): void;
     /**
      * The element appended to the library needs to be done to remove the processing, remove the support, and then import.
      * @param {Object} properties user properties,required
      * @param {String} appId app id,optional
      */
-    static userUniqAppend(properties: any, appId: string): void;
+    static userUniqAppend(properties: any, appId?: string): void;
     /**
      * Delete the user attributes, but retain the uploaded event data. This operation is not reversible and should be performed with caution.
      * @param {String} appId app id,optional
      */
-    static userDelete(appId: string): void;
+    static userDelete(appId?: string): void;
     /**
      * Set the public event attribute, which will be included in every event uploaded after that. The public event properties are saved without setting them each time.
      * @param {Object} properties super properties,required
      * @param {String} appId app id,optional
      */
-    static setSuperProperties(properties: any, appId: string): void;
+    static setSuperProperties(properties: any, appId?: string): void;
     /**
      * Clears a public event attribute.
      * @param {String} property public event attribute key to clear,required
      * @param {String} appId app id,optional
      */
-    static unsetSuperProperty(property: string, appId: string): void;
+    static unsetSuperProperty(property: string, appId?: string): void;
     /**
      * Clear all public event attributes.
      * @param {String} appId app id,optional
      */
-    static clearSuperProperties(appId: string): void;
+    static clearSuperProperties(appId?: string): void;
     /**
      * Gets the public event properties that have been set.
      * @param {String} appId app id,optional
      * @returns Public event properties that have been set
      */
-    static getSuperProperties(appId: string): Promise<any>;
+    static getSuperProperties(appId?: string): Promise<any>;
     /**
      * Set dynamic public properties. Each event uploaded after that will contain a public event attribute.
      * @param {Object} dynamicProperties dynamic public properties,required
      * @param {String} appId app id,optional
      */
-    static setDynamicSuperProperties(dynamicProperties: any, appId: string): void;
+    static setDynamicSuperProperties(dynamicProperties: any, appId?: string): void;
     /**
      * Gets prefabricated properties for all events.
      * @param {String} appId app id,optional
      * @returns preset properties
      */
-    static getPresetProperties(appId: string): Promise<any>;
+    static getPresetProperties(appId?: string): Promise<any>;
     /**
      *  Set the account ID. Each setting overrides the previous value. Login events will not be uploaded.
      * @param {String} loginId account id,required
      * @param {String} appId app id,optional
      */
-    static login(loginId: string, appId: string): void;
+    static login(loginId: string, appId?: string): void;
     /**
      * Clearing the account ID will not upload user logout events.
      * @param {String} appId app id,optional
      */
-    static logout(appId: string): void;
+    static logout(appId?: string): void;
     /**
      * Set the distinct ID to replace the default UUID distinct ID.
      * @param {String} distinctId distinct id,required
      * @param {String} appId app id,optional
      */
-    static setDistinctId(distinctId: string, appId: string): void;
+    static setDistinctId(distinctId: string, appId?: string): void;
     /**
      * Get a visitor ID: The #distinct_id value in the reported data.
      * @param {String} appId app id,optional
      * @returns distinct id
      */
-    static getDistinctId(appId: string): Promise<any>;
+    static getDistinctId(appId?: string): Promise<any>;
     /**
      * Obtain the device ID.
      * @param {String} appId app id,optional
      * @returns device id,optional
      */
-    static getDeviceId(appId: string): Promise<any>;
+    static getDeviceId(appId?: string): Promise<any>;
     /**
      * Empty the cache queue. When this function is called, the data in the current cache queue will attempt to be reported.
      * If the report succeeds, local cache data will be deleted.
@@ -247,7 +242,7 @@ declare class TDAnalytics {
         STOP: string;
         SAVE_ONLY: string;
         NORMAL: string;
-    }, appId: string): void;
+    }, appId?: string): void;
     /**
      *  Enable three-party data synchronization.
      * @param {Object} options third infomations

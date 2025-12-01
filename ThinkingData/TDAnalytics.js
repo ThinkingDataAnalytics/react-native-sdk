@@ -1,11 +1,19 @@
 
 import thinkingdata, { AutoTrackEventType, TAThirdPartyShareType, TATrackStatus } from "./ThinkingAnalyticsAPI";
 
+const TDMode = {
+    NORMAL: 'normal',
+    DEBUG: 'debug',
+    DEBUG_ONLY: 'debugOnly'
+}
+
 const TDAutoTrackEventType = {
-    APP_START:  1,
+    APP_START: 1,
     APP_END: 1 << 1,
-    APP_CRASH: 1 << 2,
-    APP_INSTALL: 1 << 3
+    APP_CLICK : 1 << 2,
+    APP_VIEW_SCREEN : 1 << 3,
+    APP_CRASH: 1 << 4,
+    APP_INSTALL: 1 << 5
 }
 const TDTrackStatus = {
     PAUSE: 'pause',
@@ -40,13 +48,13 @@ const TDEventType = {
 /**
  * @class
  */
-class TDAnalytics{
+class TDAnalytics {
     static instances = {};
     /**
      * time calibration with timestamp
      * @param {long} time timestamp
      */
-    static calibrateTime(time){
+    static calibrateTime(time) {
         thinkingdata.calibrateTime(time);
     }
 
@@ -54,7 +62,7 @@ class TDAnalytics{
      * time calibration with ntp
      * @param {String} ntp_server  ntp server url
      */
-    static calibrateTimeWithNtp(ntp_server){
+    static calibrateTimeWithNtp(ntp_server) {
         thinkingdata.calibrateTimeWithNtp(ntp_server);
     }
 
@@ -63,20 +71,20 @@ class TDAnalytics{
      * @param {String} appId app id,required
      * @param {String} serverUrl server url,required
      */
-    static init(appId,serverUrl){
+    static init(appId, serverUrl) {
         var config = {
-            appid: appId,
+            appId: appId,
             serverUrl: serverUrl
         }
-        if(Object.keys(this.instances).length == 0){
+        if (Object.keys(this.instances).length == 0) {
             thinkingdata.init(config);
-            this.instances[appId]= thinkingdata;
-        }else{
+            this.instances[appId] = thinkingdata;
+        } else {
             var instance = thinkingdata.initInstance(config);
-            this.instances[appId]= instance;
+            this.instances[appId] = instance;
         }
     }
-    
+
     /**
      * Initialize the SDK with config. The track function is not available until this interface is invoked.
      * @param {Object} config init config
@@ -88,16 +96,16 @@ class TDAnalytics{
      * @property {boolean} enableLog config.enableLog whether to enable local logging,optional
      * @property {String} timeZone config.timeZone default time zone,optional
      */
-    static init(config = {}){
-        if(config['appId']){
-            config['appid']= config['appId'];
+    static init(config = {}) {
+        if (config['appid']) {
+            config['appId'] = config['appid'];
         }
-        if(Object.keys(this.instances).length == 0){
+        if (Object.keys(this.instances).length == 0) {
             thinkingdata.init(config);
-            this.instances[config.appid]= thinkingdata;
-        }else{
+            this.instances[config.appId] = thinkingdata;
+        } else {
             var instance = thinkingdata.initInstance(config);
-            this.instances[config.appid]= instance;
+            this.instances[config.appId] = instance;
         }
     }
 
@@ -111,11 +119,11 @@ class TDAnalytics{
      * @property {String} timeZone  options.timeZone event time zone, optional
      * @property {String} appId app id,optional
      */
-    static track(options = {}){
-        if(options['appId']){
-            this.instances[options['appId']].track(options['eventName'],options['properties'],options['time'],options['timeZone']);
-        }else{
-            thinkingdata.track(options['eventName'],options['properties'],options['time'],options['timeZone']);
+    static track(options = {},appId) {
+        if (appId) {
+            this.instances[appId].track(options['eventName'], options['properties'], options['time'], options['timeZone']);
+        } else {
+            thinkingdata.track(options['eventName'], options['properties'], options['time'], options['timeZone']);
         }
     }
 
@@ -130,11 +138,11 @@ class TDAnalytics{
      * @property {String} timeZone  options.timeZone event time zone, optional
      * @property {String} appId app id,optional
      */
-    static trackFirst(options = {}){
-        if(options['appId']){
-            this.instances[options['appId']].trackFirstEvent(options['eventName'],options['properties'],options['eventId'],options['time'],options['timeZone']);
-        }else{
-            thinkingdata.trackFirstEvent(options['eventName'],options['properties'],options['eventId'],options['time'],options['timeZone']);
+    static trackFirst(options = {},appId) {
+        if (appId) {
+            this.instances[appId].trackFirstEvent(options['eventName'], options['properties'], options['eventId'], options['time'], options['timeZone']);
+        } else {
+            thinkingdata.trackFirstEvent(options['eventName'], options['properties'], options['eventId'], options['time'], options['timeZone']);
         }
     }
 
@@ -149,11 +157,11 @@ class TDAnalytics{
      * @property {String} timeZone  options.timeZone event time zone, optional
      * @property {String} appId app id,optional
      */
-    static trackUpdate(options = {}){
-        if(options['appId']){
-            this.instances[options['appId']].trackUpdate(options['eventName'],options['properties'],options['eventId'],options['time'],options['timeZone']);
-        }else{
-            thinkingdata.trackUpdate(options['eventName'],options['properties'],options['eventId'],options['time'],options['timeZone']);
+    static trackUpdate(options = {},appId) {
+        if (appId) {
+            this.instances[appId].trackUpdate(options['eventName'], options['properties'], options['eventId'], options['time'], options['timeZone']);
+        } else {
+            thinkingdata.trackUpdate(options['eventName'], options['properties'], options['eventId'], options['time'], options['timeZone']);
         }
     }
 
@@ -168,11 +176,11 @@ class TDAnalytics{
      * @property {String} timeZone  options.timeZone event time zone, optional
      * @property {String} appId app id,optional
      */
-    static trackOverwrite(options = {}){
-        if(options['appId']){
-            this.instances[options['appId']].trackOverwrite(options['eventName'],options['properties'],options['eventId'],options['time'],options['timeZone']);
-        }else{
-            thinkingdata.trackOverwrite(options['eventName'],options['properties'],options['eventId'],options['time'],options['timeZone']);
+    static trackOverwrite(options = {},appId) {
+        if (appId) {
+            this.instances[appId].trackOverwrite(options['eventName'], options['properties'], options['eventId'], options['time'], options['timeZone']);
+        } else {
+            thinkingdata.trackOverwrite(options['eventName'], options['properties'], options['eventId'], options['time'], options['timeZone']);
         }
     }
 
@@ -181,10 +189,10 @@ class TDAnalytics{
      * @param {String} eventName event name,required
      * @param {String} appId app id,optional
      */
-    static timeEvent(eventName,appId){
-        if(appId){
+    static timeEvent(eventName, appId) {
+        if (appId) {
             this.instances[appId].timeEvent(eventName);
-        }else{
+        } else {
             thinkingdata.timeEvent(eventName);
         }
     }
@@ -194,24 +202,11 @@ class TDAnalytics{
      * @param {TDAutoTrackEventType} autoTrackEventType Indicates the type of the automatic collection event to be enabled,required
      * @param {String} appId app id,optional
      */
-    static enableAutoTrack(autoTrackEventType,appId){
-        var autoTracks = [];
-        if((autoTrackEventType & TDAutoTrackEventType.APP_START) > 0){
-            autoTracks.push(AutoTrackEventType.APP_START);
-        }
-        if((autoTrackEventType & TDAutoTrackEventType.APP_END) > 0){
-            autoTracks.push(AutoTrackEventType.APP_END);
-        }
-        if((autoTrackEventType & TDAutoTrackEventType.APP_CRASH) > 0){
-            autoTracks.push(AutoTrackEventType.APP_CRASH);
-        }
-        if((autoTrackEventType & TDAutoTrackEventType.APP_INSTALL) > 0){
-            autoTracks.push(AutoTrackEventType.APP_INSTALL);
-        }
-        if(appId){
-            this.instances[appId].enableAutoTrack(autoTracks);
-        }else{
-            thinkingdata.enableAutoTrack(autoTracks);
+    static enableAutoTrack(autoTrackEventType, properties,appId) {
+        if (appId) {
+            this.instances[appId].enableAutoTrack(autoTrackEventType,properties);
+        } else {
+            thinkingdata.enableAutoTrack(autoTrackEventType,properties);
         }
     }
 
@@ -223,28 +218,28 @@ class TDAnalytics{
      * @property {Object} properties options.properties track event  properties,required
      * @property {String} appId options.appId app id,optional
      */
-    static enableAutoTrackWithProperties(options = {}){
+    static enableAutoTrackWithProperties(options = {}) {
         var appId = options['appId'];
         var autoTrackEventType = options['autoTrackTypes'];
         var properties = options['properties'];
         var autoTracks = [];
-        if((autoTrackEventType & TDAutoTrackEventType.APP_START) > 0){
+        if ((autoTrackEventType & TDAutoTrackEventType.APP_START) > 0) {
             autoTracks.push(AutoTrackEventType.APP_START);
         }
-        if((autoTrackEventType & TDAutoTrackEventType.APP_END) > 0){
+        if ((autoTrackEventType & TDAutoTrackEventType.APP_END) > 0) {
             autoTracks.push(AutoTrackEventType.APP_END);
         }
-        if((autoTrackEventType & TDAutoTrackEventType.APP_CRASH) > 0){
+        if ((autoTrackEventType & TDAutoTrackEventType.APP_CRASH) > 0) {
             autoTracks.push(AutoTrackEventType.APP_CRASH);
         }
-        if((autoTrackEventType & TDAutoTrackEventType.APP_INSTALL) > 0){
+        if ((autoTrackEventType & TDAutoTrackEventType.APP_INSTALL) > 0) {
             autoTracks.push(AutoTrackEventType.APP_INSTALL);
         }
-        if(appId){
-            this.instances[appId].setAutoTrackProperties(autoTracks,properties);
+        if (appId) {
+            this.instances[appId].setAutoTrackProperties(autoTracks, properties);
             this.instances[appId].enableAutoTrack(autoTracks);
-        }else{
-            thinkingdata.setAutoTrackProperties(autoTracks,properties);
+        } else {
+            thinkingdata.setAutoTrackProperties(autoTracks, properties);
             thinkingdata.enableAutoTrack(autoTracks);
         }
     }
@@ -254,23 +249,23 @@ class TDAnalytics{
      * @param {Object} properties user properties,required
      * @param {String} appId app id,optional
      */
-    static userSet(properties,appId){
-        if(appId){
+    static userSet(properties, appId) {
+        if (appId) {
             this.instances[appId].userSet(properties);
-        }else{
+        } else {
             thinkingdata.userSet(properties);
         }
     }
-   
+
     /**
      * Sets a single user attribute, ignoring the new attribute value if the attribute already exists.
      * @param {Object} properties user properties,required
      * @param {String} appId app id,optional
      */
-    static userSetOnce(properties,appId){
-        if(appId){
+    static userSetOnce(properties, appId) {
+        if (appId) {
             this.instances[appId].userSetOnce(properties);
-        }else{
+        } else {
             thinkingdata.userSetOnce(properties);
         }
     }
@@ -280,10 +275,10 @@ class TDAnalytics{
      * @param {String} property user property,required
      * @param {String} appId app id,optional
      */
-    static userUnset(property,appId){
-        if(appId){
+    static userUnset(property, appId) {
+        if (appId) {
             this.instances[appId].userUnset(property);
-        }else{
+        } else {
             thinkingdata.userUnset(property);
         }
     }
@@ -293,10 +288,10 @@ class TDAnalytics{
      * @param {object} properties user properties,required
      * @param {String} appId app id,optional
      */
-    static userAdd(properties,appId){
-        if(appId){
+    static userAdd(properties, appId) {
+        if (appId) {
             this.instances[appId].userAdd(properties);
-        }else{
+        } else {
             thinkingdata.userAdd(properties);
         }
     }
@@ -306,10 +301,10 @@ class TDAnalytics{
      * @param {Object} properties user properties,required
      * @param {String} appId app id,optional
      */
-    static userAppend(properties,appId){
-        if(appId){
+    static userAppend(properties, appId) {
+        if (appId) {
             this.instances[appId].userAppend(properties);
-        }else{
+        } else {
             thinkingdata.userAppend(properties);
         }
     }
@@ -319,22 +314,22 @@ class TDAnalytics{
      * @param {Object} properties user properties,required
      * @param {String} appId app id,optional
      */
-    static userUniqAppend(properties,appId){
-        if(appId){
+    static userUniqAppend(properties, appId) {
+        if (appId) {
             this.instances[appId].userUniqAppend(properties);
-        }else{
+        } else {
             thinkingdata.userUniqAppend(properties);
         }
     }
-    
+
     /**
      * Delete the user attributes, but retain the uploaded event data. This operation is not reversible and should be performed with caution.
      * @param {String} appId app id,optional
      */
-    static userDelete(appId){
-        if(appId){
+    static userDelete(appId) {
+        if (appId) {
             this.instances[appId].userDel();
-        }else{
+        } else {
             thinkingdata.userDel();
         }
     }
@@ -344,10 +339,10 @@ class TDAnalytics{
      * @param {Object} properties super properties,required
      * @param {String} appId app id,optional
      */
-    static setSuperProperties(properties,appId){
-        if(appId){
+    static setSuperProperties(properties, appId) {
+        if (appId) {
             this.instances[appId].setSuperProperties(properties);
-        }else{
+        } else {
             thinkingdata.setSuperProperties(properties);
         }
     }
@@ -357,10 +352,10 @@ class TDAnalytics{
      * @param {String} property public event attribute key to clear,required
      * @param {String} appId app id,optional
      */
-    static unsetSuperProperty(property,appId){
-        if(appId){
+    static unsetSuperProperty(property, appId) {
+        if (appId) {
             this.instances[appId].unsetSuperProperty(property);
-        }else{
+        } else {
             thinkingdata.unsetSuperProperty(property);
         }
     }
@@ -369,10 +364,10 @@ class TDAnalytics{
      * Clear all public event attributes.
      * @param {String} appId app id,optional
      */
-    static clearSuperProperties(appId){
-        if(appId){
+    static clearSuperProperties(appId) {
+        if (appId) {
             this.instances[appId].clearSuperProperties();
-        }else{
+        } else {
             thinkingdata.clearSuperProperties();
         }
     }
@@ -382,10 +377,10 @@ class TDAnalytics{
      * @param {String} appId app id,optional
      * @returns Public event properties that have been set
      */
-    static async getSuperProperties(appId){
-        if(appId){
+    static async getSuperProperties(appId) {
+        if (appId) {
             return await this.instances[appId].getSuperProperties();
-        }else{
+        } else {
             return await thinkingdata.getSuperProperties();
         }
     }
@@ -395,10 +390,10 @@ class TDAnalytics{
      * @param {Object} dynamicProperties dynamic public properties,required
      * @param {String} appId app id,optional
      */
-    static setDynamicSuperProperties(dynamicProperties,appId){
-        if(appId){
+    static setDynamicSuperProperties(dynamicProperties, appId) {
+        if (appId) {
             this.instances[appId].setDynamicSuperProperties(dynamicProperties);
-        }else{
+        } else {
             thinkingdata.setDynamicSuperProperties(dynamicProperties)
         }
     }
@@ -408,10 +403,10 @@ class TDAnalytics{
      * @param {String} appId app id,optional
      * @returns preset properties
      */
-    static async getPresetProperties(appId){
-        if(appId){
+    static async getPresetProperties(appId) {
+        if (appId) {
             return await this.instances[appId].getPresetProperties();
-        }else{
+        } else {
             return await thinkingdata.getPresetProperties();
         }
     }
@@ -421,10 +416,10 @@ class TDAnalytics{
      * @param {String} loginId account id,required
      * @param {String} appId app id,optional
      */
-    static login(loginId,appId){
-        if(appId){
+    static login(loginId, appId) {
+        if (appId) {
             this.instances[appId].login(loginId);
-        }else{
+        } else {
             thinkingdata.login(loginId);
         }
     }
@@ -433,10 +428,10 @@ class TDAnalytics{
      * Clearing the account ID will not upload user logout events.
      * @param {String} appId app id,optional
      */
-    static logout(appId){
-        if(appId){
+    static logout(appId) {
+        if (appId) {
             this.instances[appId].logout();
-        }else{
+        } else {
             thinkingdata.logout();
         }
     }
@@ -446,10 +441,10 @@ class TDAnalytics{
      * @param {String} distinctId distinct id,required
      * @param {String} appId app id,optional
      */
-    static setDistinctId(distinctId,appId){
-        if(appId){
+    static setDistinctId(distinctId, appId) {
+        if (appId) {
             this.instances[appId].identify(distinctId);
-        }else{
+        } else {
             thinkingdata.identify(distinctId);
         }
     }
@@ -459,11 +454,19 @@ class TDAnalytics{
      * @param {String} appId app id,optional
      * @returns distinct id
      */
-    static async getDistinctId(appId){
-        if(appId){
+    static async getDistinctId(appId) {
+        if (appId) {
             return await this.instances[appId].getDistinctId();
-        }else{
+        } else {
             return await thinkingdata.getDistinctId();
+        }
+    }
+
+    static async getAccountId(appId){
+        if (appId) {
+            return await this.instances[appId].getAccountId();
+        } else {
+            return await thinkingdata.getAccountId();
         }
     }
 
@@ -472,10 +475,10 @@ class TDAnalytics{
      * @param {String} appId app id,optional
      * @returns device id,optional
      */
-    static async getDeviceId(appId){
-        if(appId){
+    static async getDeviceId(appId) {
+        if (appId) {
             return await this.instances[appId].getDeviceId();
-        }else{
+        } else {
             return await thinkingdata.getDeviceId();
         }
     }
@@ -485,10 +488,10 @@ class TDAnalytics{
      * If the report succeeds, local cache data will be deleted.
      * @param {String} appId app id,optional
      */
-    static flush(appId){
-        if(appId){
+    static flush(appId) {
+        if (appId) {
             this.instances[appId].flush();
-        }else{
+        } else {
             thinkingdata.flush();
         }
     }
@@ -498,18 +501,18 @@ class TDAnalytics{
      * @param {TDTrackStatus} status TDTrackStatus,required
      * @param {String} appId app id,optional
      */
-    static setTrackStatus(status,appId){
+    static setTrackStatus(status, appId) {
         var s = TATrackStatus.NORMAL;
-        if(status == TDTrackStatus.PAUSE){
+        if (status == TDTrackStatus.PAUSE) {
             s = TATrackStatus.PAUSE;
-        }else if(status == TDTrackStatus.STOP){
+        } else if (status == TDTrackStatus.STOP) {
             s = TATrackStatus.STOP;
-        }else if(status == TDTrackStatus.SAVE_ONLY){
+        } else if (status == TDTrackStatus.SAVE_ONLY) {
             s = TATrackStatus.SAVE_ONLY;
         }
-        if(appId){
+        if (appId) {
             this.instances[appId].setTrackStatus(s);
-        }else{
+        } else {
             thinkingdata.setTrackStatus(s);
         }
     }
@@ -522,37 +525,13 @@ class TDAnalytics{
      * @property {Object} params extras,optional
      * @property {String} appId app id,optional
      */
-    static enableThirdPartySharing(options = {}){
-        var appId = options['appId'];
-        var types = options['types'];
-        var params = options['params'];
-        var thirdTypes = [];
-        if((types & TDThirdPartyType.APPS_FLYER) > 0){
-            thirdTypes.push(TAThirdPartyShareType.TA_APPS_FLYER);
-        }
-        if((types & TDThirdPartyType.IRON_SOURCE) > 0){
-            thirdTypes.push(TAThirdPartyShareType.TA_IRON_SOURCE);
-        }
-        if((types & TDThirdPartyType.ADJUST) > 0){
-            thirdTypes.push(TAThirdPartyShareType.TA_ADJUST);
-        }
-        if((types & TDThirdPartyType.BRANCH) > 0){
-            thirdTypes.push(TAThirdPartyShareType.TA_BRANCH);
-        }
-        if((types & TDThirdPartyType.TOP_ON) > 0){
-            thirdTypes.push(TAThirdPartyShareType.TA_TOP_ON);
-        }
-        if((types & TDThirdPartyType.TRACKING) > 0){
-            thirdTypes.push(TAThirdPartyShareType.TA_TRACKING);
-        }
-        if((types & TDThirdPartyType.TRAD_PLUS) > 0){
-            thirdTypes.push(TAThirdPartyShareType.TA_TRAD_PLUS);
-        }
-        console.log(thirdTypes);
-        if(appId){
-            this.instances[appId].enableThirdPartySharing(thirdTypes,params);
-        }else{
-            thinkingdata.enableThirdPartySharing(thirdTypes,params);
+    static enableThirdPartySharing(options = {},appId) {
+        let types = options['types'];
+        let params = options['params'];
+        if (appId) {
+            this.instances[appId].enableThirdPartySharing(types, params);
+        } else {
+            thinkingdata.enableThirdPartySharing(types, params);
         }
     }
 
@@ -582,9 +561,9 @@ class TDAnalytics{
         let extraID;
         if (type === TDEventType.Track) {
             extraID = dataInfo['#first_check_id'];
-        if (extraID) {
-            type = TDEventType.TrackFirst;
-        }
+            if (extraID) {
+                type = TDEventType.TrackFirst;
+            }
         } else {
             extraID = dataInfo['#event_id'];
         }
@@ -598,13 +577,13 @@ class TDAnalytics{
             const dateTime = new Date(time);
             let timeZone;
             if (properties['#zone_offset']) {
-              const zoneOffset = properties['#zone_offset'];
-              const diffHours = -dateTime.getTimezoneOffset() / 60 - zoneOffset;
-              const hours = Math.floor(diffHours);
-              const minutes = Math.floor((diffHours - hours) * 60);
-              dateTime.setHours(dateTime.getHours() + hours);
-              dateTime.setMinutes(dateTime.getMinutes() + minutes);
-              timeZone = this._formatTimeZone(zoneOffset);
+                const zoneOffset = properties['#zone_offset'];
+                const diffHours = -dateTime.getTimezoneOffset() / 60 - zoneOffset;
+                const hours = Math.floor(diffHours);
+                const minutes = Math.floor((diffHours - hours) * 60);
+                dateTime.setHours(dateTime.getHours() + hours);
+                dateTime.setMinutes(dateTime.getMinutes() + minutes);
+                timeZone = this._formatTimeZone(zoneOffset);
             }
             if (type === TDEventType.Track) {
                 this.track({
@@ -612,7 +591,7 @@ class TDAnalytics{
                     properties,
                     time: dateTime.getTime(),
                     timeZone
-                    });
+                });
                 return;
             }
             const eventModel = {
@@ -638,59 +617,59 @@ class TDAnalytics{
         } else {
             this._handleUserEvent(type, properties);
         }
-      }
-      
-      static _handleUserEvent(type, properties) {
+    }
+
+    static _handleUserEvent(type, properties) {
         switch (type) {
             case TDEventType.UserDel:
-            this.userDelete();
-            break;
-          case TDEventType.UserAdd:
-            this.userAdd(properties);
-            break;
-          case TDEventType.UserSet:
-            this.userSet(properties);
-            break;
-          case TDEventType.UserSetOnce:
-            this.userSetOnce(properties);
-            break;
-          case TDEventType.UserUnset:
-            this.userUnset(Object.keys(properties)[0]);
-            break;
-          case TDEventType.UserAppend:
-            this.userAppend(properties);
-            break;
-          case TDEventType.UserUniqAppend:
-            this.userUniqAppend(properties);
-            break;
+                this.userDelete();
+                break;
+            case TDEventType.UserAdd:
+                this.userAdd(properties);
+                break;
+            case TDEventType.UserSet:
+                this.userSet(properties);
+                break;
+            case TDEventType.UserSetOnce:
+                this.userSetOnce(properties);
+                break;
+            case TDEventType.UserUnset:
+                this.userUnset(Object.keys(properties)[0]);
+                break;
+            case TDEventType.UserAppend:
+                this.userAppend(properties);
+                break;
+            case TDEventType.UserUniqAppend:
+                this.userUniqAppend(properties);
+                break;
         }
-      }
-      
-      static _formatTimeZone(hours) {
+    }
+
+    static _formatTimeZone(hours) {
         const sign = hours >= 0 ? '+' : '-';
         const hourAbs = Math.abs(hours);
         const minutes = Math.floor((hourAbs - Math.floor(hourAbs)) * 60);
         const hourPart = `${Math.floor(hourAbs).toString().padStart(2, '0')}`;
         const minutePart = `${minutes.toString().padStart(2, '0')}`;
-      
+
         return `GMT${sign}${hourPart}:${minutePart}`;
-      }
-      
-      static _isTrackEvent(eventType) {
+    }
+
+    static _isTrackEvent(eventType) {
         return [
-          TDEventType.Track,
-          TDEventType.TrackFirst,
-          TDEventType.TrackUpdate,
-          TDEventType.TrackOverwrite,
+            TDEventType.Track,
+            TDEventType.TrackFirst,
+            TDEventType.TrackUpdate,
+            TDEventType.TrackOverwrite,
         ].includes(eventType);
-      }
-      
-      static _cleanProperties(properties) {
+    }
+
+    static _cleanProperties(properties) {
         const keysToRemove = ['#account_id', '#distinct_id', '#device_id', '#lib', '#lib_version', '#screen_height', '#screen_width'];
         keysToRemove.forEach(key => delete properties[key]);
         return properties;
-      }
+    }
 }
 
-export { TDAutoTrackEventType,TDTrackStatus,TDThirdPartyType};
+export { TDAutoTrackEventType, TDTrackStatus, TDThirdPartyType, TDMode };
 export default TDAnalytics

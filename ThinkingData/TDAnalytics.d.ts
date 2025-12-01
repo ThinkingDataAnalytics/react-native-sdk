@@ -1,7 +1,14 @@
 export default TDAnalytics;
+export namespace TDMode {
+    let NORMAL: string;
+    let DEBUG: string;
+    let DEBUG_ONLY: string;
+}
 export namespace TDAutoTrackEventType {
     let APP_START: number;
     let APP_END: number;
+    let APP_CLICK:number;
+    let APP_VIEW_SCREEN:number;
     let APP_CRASH: number;
     let APP_INSTALL: number;
 }
@@ -20,6 +27,47 @@ export namespace TDThirdPartyType {
     let TRACKING: number;
     let TRAD_PLUS: number;
 }
+
+type TDModeType = typeof TDMode.NORMAL | typeof TDMode.DEBUG | typeof TDMode.DEBUG_ONLY;
+type TDThirdPartyMode = typeof TDThirdPartyType.APPS_FLYER | typeof TDThirdPartyType.ADJUST | typeof TDThirdPartyType.BRANCH | typeof TDThirdPartyType.IRON_SOURCE
+    | typeof TDThirdPartyType.TOP_ON | typeof TDThirdPartyType.TRACKING
+
+type TDAutoTrackEventMode = typeof TDAutoTrackEventType.APP_START | typeof TDAutoTrackEventType.APP_END | typeof TDAutoTrackEventType.APP_INSTALL | typeof TDAutoTrackEventType.APP_CRASH
+type TDTrackStatusMode = typeof TDTrackStatus.NORMAL | typeof TDTrackStatus.STOP | typeof TDTrackStatus.SAVE_ONLY | typeof TDTrackStatus.PAUSE
+
+interface TDConfig {
+    appId: string;
+    serverUrl: string;
+    mode?: TDModeType,
+    enableEncrypt?: boolean;
+    secretKey?: {
+        publicKey: string;
+        version: number;
+    };
+    enableLog?: boolean;
+    timeZone?: number;
+}
+
+interface TDEvent {
+    eventName: string;
+    properties?: object;
+    time?: Date;
+    timeZone?: number;
+}
+
+interface TDSpecialEvent {
+    eventName: string;
+    properties?: object;
+    time?: Date;
+    timeZone?: number;
+    eventId?: string
+}
+
+interface TDThirdPartyPramas {
+    types: TDThirdPartyMode;
+    params?: object;
+}
+
 /**
  * @class
  */
@@ -27,9 +75,9 @@ declare class TDAnalytics {
     static instances: {};
     /**
      * time calibration with timestamp
-     * @param {long} time timestamp
+     * @param {number} time timestamp
      */
-    static calibrateTime(time: long): void;
+    static calibrateTime(time: number): void;
     /**
      * time calibration with ntp
      * @param {String} ntp_server  ntp server url
@@ -52,7 +100,7 @@ declare class TDAnalytics {
      * @property {boolean} enableLog config.enableLog whether to enable local logging,optional
      * @property {String} timeZone config.timeZone default time zone,optional
      */
-    static init(appId: object): void;
+    static init(appId: TDConfig): void;
     /**
      * Upload a single event, containing only preset properties and set public properties.
      * @param {Object} options event infomations
@@ -63,7 +111,7 @@ declare class TDAnalytics {
      * @property {String} timeZone  options.timeZone event time zone, optional
      * @property {String} appId app id,optional
      */
-    static track(options?: any): void;
+    static track(options: TDEvent, appId?: string): void;
     /**
      * Sending First Event
      * @param {Object} options event infomations
@@ -75,7 +123,7 @@ declare class TDAnalytics {
      * @property {String} timeZone  options.timeZone event time zone, optional
      * @property {String} appId app id,optional
      */
-    static trackFirst(options?: any): void;
+    static trackFirst(options: TDSpecialEvent, appId?: string): void;
     /**
      * Sending Updatable Event
      * @param {Object} options event infomations
@@ -87,7 +135,7 @@ declare class TDAnalytics {
      * @property {String} timeZone  options.timeZone event time zone, optional
      * @property {String} appId app id,optional
      */
-    static trackUpdate(options?: any): void;
+    static trackUpdate(options: TDSpecialEvent, appId?: string): void;
     /**
      * Sending Overwritable Event
      * @param {Object} options event infomations
@@ -99,7 +147,7 @@ declare class TDAnalytics {
      * @property {String} timeZone  options.timeZone event time zone, optional
      * @property {String} appId app id,optional
      */
-    static trackOverwrite(options?: any): void;
+    static trackOverwrite(options: TDSpecialEvent, appId?: string): void;
     /**
      * Record the event duration, call this method to start the timing, stop the timing when the target event is uploaded, and add the attribute #duration to the event properties, in seconds.
      * @param {String} eventName event name,required
@@ -111,28 +159,19 @@ declare class TDAnalytics {
      * @param {TDAutoTrackEventType} autoTrackEventType Indicates the type of the automatic collection event to be enabled,required
      * @param {String} appId app id,optional
      */
-    static enableAutoTrack(autoTrackEventType: TDAutoTrackEventType, appId?: string): void;
-    /**
-     * Enable the auto tracking function with properties
-     * @param {Object} options  autoTrack infomations
-     *
-     * @property {TDAutoTrackEventType}autoTrackTypes options.autoTrackEventType Indicates the type of the automatic collection event to be enabled,required
-     * @property {Object} properties options.properties track event  properties,required
-     * @property {String} appId options.appId app id,optional
-     */
-    static enableAutoTrackWithProperties(options?: any): void;
+    static enableAutoTrack(autoTrackEventType: TDAutoTrackEventMode, properties?: object, appId?: string): void;
     /**
      * Sets the user property, replacing the original value with the new value if the property already exists.
-     * @param {Object} properties user properties,required
+     * @param {Object} options user properties,required
      * @param {String} appId app id,optional
      */
-    static userSet(properties: any, appId?: string): void;
+    static userSet(properties: object, appId?: string): void;
     /**
      * Sets a single user attribute, ignoring the new attribute value if the attribute already exists.
      * @param {Object} properties user properties,required
      * @param {String} appId app id,optional
      */
-    static userSetOnce(properties: any, appId?: string): void;
+    static userSetOnce(properties: object, appId?: string): void;
     /**
      * Reset user properties.
      * @param {String} property user property,required
@@ -150,13 +189,13 @@ declare class TDAnalytics {
      * @param {Object} properties user properties,required
      * @param {String} appId app id,optional
      */
-    static userAppend(properties: any, appId?: string): void;
+    static userAppend(properties: object, appId?: string): void;
     /**
      * The element appended to the library needs to be done to remove the processing, remove the support, and then import.
      * @param {Object} properties user properties,required
      * @param {String} appId app id,optional
      */
-    static userUniqAppend(properties: any, appId?: string): void;
+    static userUniqAppend(properties: object, appId?: string): void;
     /**
      * Delete the user attributes, but retain the uploaded event data. This operation is not reversible and should be performed with caution.
      * @param {String} appId app id,optional
@@ -167,7 +206,7 @@ declare class TDAnalytics {
      * @param {Object} properties super properties,required
      * @param {String} appId app id,optional
      */
-    static setSuperProperties(properties: any, appId?: string): void;
+    static setSuperProperties(properties: object, appId?: string): void;
     /**
      * Clears a public event attribute.
      * @param {String} property public event attribute key to clear,required
@@ -184,19 +223,19 @@ declare class TDAnalytics {
      * @param {String} appId app id,optional
      * @returns Public event properties that have been set
      */
-    static getSuperProperties(appId?: string): Promise<any>;
+    static getSuperProperties(appId?: string): Promise<object>;
     /**
      * Set dynamic public properties. Each event uploaded after that will contain a public event attribute.
      * @param {Object} dynamicProperties dynamic public properties,required
      * @param {String} appId app id,optional
      */
-    static setDynamicSuperProperties(dynamicProperties: any, appId?: string): void;
+    static setDynamicSuperProperties(dynamicProperties: Function, appId?: string): void;
     /**
      * Gets prefabricated properties for all events.
      * @param {String} appId app id,optional
      * @returns preset properties
      */
-    static getPresetProperties(appId?: string): Promise<any>;
+    static getPresetProperties(appId?: string): Promise<object>;
     /**
      *  Set the account ID. Each setting overrides the previous value. Login events will not be uploaded.
      * @param {String} loginId account id,required
@@ -219,13 +258,15 @@ declare class TDAnalytics {
      * @param {String} appId app id,optional
      * @returns distinct id
      */
-    static getDistinctId(appId?: string): Promise<any>;
+    static getDistinctId(appId?: string): Promise<string>;
+
+    static getAccountId(appId?: string): Promise<string>;
     /**
      * Obtain the device ID.
      * @param {String} appId app id,optional
      * @returns device id,optional
      */
-    static getDeviceId(appId?: string): Promise<any>;
+    static getDeviceId(appId?: string): Promise<string>;
     /**
      * Empty the cache queue. When this function is called, the data in the current cache queue will attempt to be reported.
      * If the report succeeds, local cache data will be deleted.
@@ -237,12 +278,7 @@ declare class TDAnalytics {
      * @param {TDTrackStatus} status TDTrackStatus,required
      * @param {String} appId app id,optional
      */
-    static setTrackStatus(status: {
-        PAUSE: string;
-        STOP: string;
-        SAVE_ONLY: string;
-        NORMAL: string;
-    }, appId?: string): void;
+    static setTrackStatus(status: TDTrackStatusMode, appId?: string): void;
     /**
      *  Enable three-party data synchronization.
      * @param {Object} options third infomations
@@ -251,7 +287,7 @@ declare class TDAnalytics {
      * @property {Object} params extras,optional
      * @property {String} appId app id,optional
      */
-    static enableThirdPartySharing(options?: any): void;
+    static enableThirdPartySharing(options: TDThirdPartyPramas, appId?: string): void;
 
     /**
      * h5 event handler. 

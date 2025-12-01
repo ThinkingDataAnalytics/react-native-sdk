@@ -1,5 +1,4 @@
-// Thinkingdata RN SDK v2.1.0
-package cn.thinkingdata;
+package cn.thinking;
 
 import android.text.TextUtils;
 
@@ -14,16 +13,25 @@ import com.facebook.react.bridge.ReadableMapKeySetIterator;
 import com.facebook.react.bridge.ReadableType;
 import com.facebook.react.bridge.WritableMap;
 
-import cn.thinkingdata.analytics.ThinkingAnalyticsSDK;
-import cn.thinkingdata.engine.ThinkingGameEngineApi;
+import cn.thinkingdata.analytics.TDAnalytics;
+import cn.thinkingdata.analytics.TDAnalyticsAPI;
+import cn.thinkingdata.analytics.TDConfig;
+import cn.thinkingdata.analytics.TDPresetProperties;
+import cn.thinkingdata.analytics.model.TDFirstEventModel;
+import cn.thinkingdata.analytics.model.TDOverWritableEventModel;
+import cn.thinkingdata.analytics.model.TDUpdatableEventModel;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.TimeZone;
 
 public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
 
@@ -33,7 +41,14 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
 
     private static final String MODULE_NAME = "RNThinkingAnalyticsModule";
 
-    private final ThinkingGameEngineApi mApi = new ThinkingGameEngineApi();
+    private boolean isEnableAutoTrack = false;
+    private boolean isEnablePageView = false;
+    private boolean isEnableViewClick = false;
+    private final List<JSONObject> previewPageViewList = new ArrayList<>();
+    private String lastScreenName;
+    private String mCurrentScreenName;
+    private String mCurrentTitle;
+    private Map<Integer, TDViewProperties> viewPropertiesMap = new HashMap<>();
 
     @Override
     public String getName() {
@@ -49,67 +64,71 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
         try {
             json = new JSONObject(properties.toString()).getJSONObject("NativeMap");
         } catch (Exception e) {
-            try{
+            try {
                 json = new JSONObject(properties.toString());
-            }catch(Exception e1){
+            } catch (Exception e1) {
 
             }
         }
         return json;
     }
 
+    private TimeZone getTimeZone(double timeZoneOffset) {
+        if (timeZoneOffset < -12 || timeZoneOffset > 14) {
+            return TimeZone.getDefault();
+        }
+        int hour = ( int ) timeZoneOffset;
+        int minute = ( int ) Math.round((timeZoneOffset - hour) * 60);
+        if (minute >= 60) {
+            hour += 1;
+            minute -= 60;
+        } else if (minute <= -60) {
+            hour -= 1;
+            minute += 60;
+        }
+        String timeZoneId = String.format(Locale.ROOT,
+                hour >= 0 ? "GMT+%02d:%02d" : "GMT%02d:%02d",
+                hour,
+                Math.abs(minute)
+        );
+        return TimeZone.getTimeZone(timeZoneId);
+    }
 
     @ReactMethod
     public void init(ReadableMap readableMap, String libVersion) {
         try {
-            JSONObject json = new JSONObject();
-            String appid = readableMap.getString("appid");
+            String appId = readableMap.getString("appId");
             String serverUrl = readableMap.getString("serverUrl");
-            if (TextUtils.isEmpty(appid) || TextUtils.isEmpty(serverUrl)) return;
-            json.put("appId",appid);
-            json.put("serverUrl",serverUrl);
-
+            if (TextUtils.isEmpty(appId) || TextUtils.isEmpty(serverUrl)) return;
+            TDConfig config = TDConfig.getInstance(getReactApplicationContext(), appId, serverUrl);
             if (readableMap.hasKey("timeZone")) {
-                String timeZoneId = readableMap.getString("timeZone");
-                json.put("timeZone",timeZoneId);
+                double timeZone = readableMap.getDouble("timeZone");
+                config.setDefaultTimeZone(getTimeZone(timeZone));
             }
-
             if (readableMap.hasKey("mode")) {
                 String mode = readableMap.getString("mode");
                 if (TextUtils.equals(mode, "debug")) {
-                    json.put("mode",1);
+                    config.setMode(TDConfig.TDMode.DEBUG);
                 } else if (TextUtils.equals(mode, "debugOnly")) {
-                    json.put("mode",2);
-                } else {
-                    json.put("mode",0);
+                    config.setMode(TDConfig.TDMode.DEBUG_ONLY);
                 }
             }
-
-            if (readableMap.hasKey("enableEncrypt")) {
+            if (readableMap.hasKey("enableEncrypt") && readableMap.hasKey("secretKey")) {
                 boolean enableEncrypt = readableMap.getBoolean("enableEncrypt");
-                json.put("enableEncrypt",enableEncrypt);
-            }
-
-            if (readableMap.hasKey("secretKey")) {
-                JSONObject secretJson = new JSONObject();
-                ReadableMap secretKey = readableMap.getMap("secretKey");
-                if (secretKey != null) {
-                    secretJson.put("publicKey",secretKey.getString("publicKey"));
-                    secretJson.put("version",secretKey.getInt("version"));
-                    secretJson.put("symmetricEncryption",secretKey.getString("symmetricEncryption"));
-                    secretJson.put("asymmetricEncryption",secretKey.getString("asymmetricEncryption"));
-                    json.put("secretKey",secretJson);
+                if (enableEncrypt) {
+                    ReadableMap secretKey = readableMap.getMap("secretKey");
+                    if (secretKey != null) {
+                        config.enableEncrypt(secretKey.getInt("version"), secretKey.getString("publicKey"));
+                    }
                 }
             }
-
             if (readableMap.hasKey("enableLog")) {
                 boolean enableLog = readableMap.getBoolean("enableLog");
-                mApi.enableTrackLog(enableLog);
+                TDAnalytics.enableLog(enableLog);
             }
-            mApi.setCustomerLibInfo("ReactNative", libVersion);
-            mApi.sharedInstance(getReactApplicationContext(),json.toString());
-        }catch (Exception e){
-            
+            TDAnalytics.setCustomerLibInfo("ReactNative", libVersion);
+            TDAnalytics.init(config);
+        } catch (Exception ignore) {
         }
     }
 
@@ -117,504 +136,308 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void track(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId",readableMap.getString("appid"));
-            }
-            if (readableMap.hasKey("eventName")) {
-                json.put("eventName",readableMap.getString("eventName"));
-            }
-            if (readableMap.hasKey("properties")) {
-                json.put("properties",convertToJSONObject(readableMap.getMap("properties")));
-            }
+            String appId = readableMap.getString("appId");
+            String eventName = readableMap.getString("eventName");
+            JSONObject properties = convertToJSONObject(readableMap.getMap("properties"));
+            Date date = null;
+            TimeZone timeZone = null;
             if (readableMap.hasKey("time")) {
-                double time = readableMap.getDouble("time");
-                json.put("time",time);
-                if (readableMap.hasKey("timeZone")) {
-                    String timeZone = readableMap.getString("timeZone");
-                    json.put("timeZone",timeZone);
+                long time = ( long ) readableMap.getDouble("time");
+                if (time > 0) {
+                    date = new Date(time);
                 }
             }
-            mApi.track(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+            if (readableMap.hasKey("timeZone")) {
+                double zoneOffset = readableMap.getDouble("timeZone");
+                timeZone = getTimeZone(zoneOffset);
+            }
+            if (date != null && timeZone != null) {
+                TDAnalyticsAPI.track(eventName, properties, date, timeZone, appId);
+            } else {
+                TDAnalyticsAPI.track(eventName, properties, appId);
+            }
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void trackUpdate(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId", readableMap.getString("appid"));
-            }
-            if (readableMap.hasKey("eventName")) {
-                json.put("eventName", readableMap.getString("eventName"));
-            }
-            if (readableMap.hasKey("properties")) {
-                json.put("properties",convertToJSONObject(readableMap.getMap("properties")));
-            }
-            if (readableMap.hasKey("eventId")) {
-                json.put("eventId",readableMap.getString("eventId"));
-            }
-            json.put("type",1);
-
+            String appId = readableMap.getString("appId");
+            String eventName = readableMap.getString("eventName");
+            JSONObject properties = convertToJSONObject(readableMap.getMap("properties"));
+            String eventId = readableMap.getString("eventId");
+            Date date = null;
+            TimeZone timeZone = null;
             if (readableMap.hasKey("time")) {
-                double time = readableMap.getDouble("time");
-                json.put("time",time);
-                if (readableMap.hasKey("timeZone")) {
-                    String timeZone = readableMap.getString("timeZone");
-                    json.put("timeZone",timeZone);
+                long time = ( long ) readableMap.getDouble("time");
+                if (time > 0) {
+                    date = new Date(time);
                 }
             }
-            mApi.trackEvent(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+            if (readableMap.hasKey("timeZone")) {
+                double zoneOffset = readableMap.getDouble("timeZone");
+                timeZone = getTimeZone(zoneOffset);
+            }
+            TDUpdatableEventModel model = new TDUpdatableEventModel(eventName, properties, eventId);
+            if (date != null && timeZone != null) {
+                model.setEventTime(date, timeZone);
+            }
+            TDAnalyticsAPI.track(model, appId);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void trackOverwrite(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId", readableMap.getString("appid"));
-            }
-            if (readableMap.hasKey("eventName")) {
-                json.put("eventName", readableMap.getString("eventName"));
-            }
-            if (readableMap.hasKey("properties")) {
-                json.put("properties", convertToJSONObject(readableMap.getMap("properties")));
-            }
-            if (readableMap.hasKey("eventId")) {
-                json.put("eventId",readableMap.getString("eventId"));
-            }
-            json.put("type",2);
+            String appId = readableMap.getString("appId");
+            String eventName = readableMap.getString("eventName");
+            JSONObject properties = convertToJSONObject(readableMap.getMap("properties"));
+            String eventId = readableMap.getString("eventId");
+            Date date = null;
+            TimeZone timeZone = null;
             if (readableMap.hasKey("time")) {
-                double time = readableMap.getDouble("time");
-                json.put("time",time);
-                if (readableMap.hasKey("timeZone")) {
-                    String timeZone = readableMap.getString("timeZone");
-                    json.put("timeZone",timeZone);
+                long time = ( long ) readableMap.getDouble("time");
+                if (time > 0) {
+                    date = new Date(time);
                 }
             }
-            mApi.trackEvent(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+            if (readableMap.hasKey("timeZone")) {
+                double zoneOffset = readableMap.getDouble("timeZone");
+                timeZone = getTimeZone(zoneOffset);
+            }
+            TDOverWritableEventModel model = new TDOverWritableEventModel(eventName, properties, eventId);
+            if (date != null && timeZone != null) {
+                model.setEventTime(date, timeZone);
+            }
+            TDAnalyticsAPI.track(model, appId);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void trackFirstEvent(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId", readableMap.getString("appid"));
-            }
-            if (readableMap.hasKey("eventName")) {
-                json.put("eventName", readableMap.getString("eventName"));
-            }
-            if (readableMap.hasKey("properties")) {
-                json.put("properties",convertToJSONObject(readableMap.getMap("properties")));
-            }
-            if (readableMap.hasKey("eventId")) {
-                json.put("eventId",readableMap.getString("eventId"));
-            }
-            json.put("type",0);
+            String appId = readableMap.getString("appId");
+            String eventName = readableMap.getString("eventName");
+            JSONObject properties = convertToJSONObject(readableMap.getMap("properties"));
+            String eventId = readableMap.getString("eventId");
+            Date date = null;
+            TimeZone timeZone = null;
             if (readableMap.hasKey("time")) {
-                double time = readableMap.getDouble("time");
-                json.put("time",time);
-                if (readableMap.hasKey("timeZone")) {
-                    String timeZone = readableMap.getString("timeZone");
-                    json.put("timeZone",timeZone);
+                long time = ( long ) readableMap.getDouble("time");
+                if (time > 0) {
+                    date = new Date(time);
                 }
             }
-            mApi.trackEvent(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+            if (readableMap.hasKey("timeZone")) {
+                double zoneOffset = readableMap.getDouble("timeZone");
+                timeZone = getTimeZone(zoneOffset);
+            }
+            TDFirstEventModel model = new TDFirstEventModel(eventName, properties);
+            model.setFirstCheckId(eventId);
+            if (date != null && timeZone != null) {
+                model.setEventTime(date, timeZone);
+            }
+            TDAnalyticsAPI.track(model, appId);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void timeEvent(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId",readableMap.getString("appid"));
-            }
+            String appId = readableMap.getString("appId");
             if (readableMap.hasKey("eventName")) {
-                json.put("eventName",readableMap.getString("eventName"));
+                String eventName = readableMap.getString("eventName");
+                TDAnalyticsAPI.timeEvent(eventName, appId);
             }
-            mApi.timeEvent(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void login(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId",readableMap.getString("appid"));
-            }
+            String appId = readableMap.getString("appId");
             String loginId = readableMap.getString("loginId");
-            json.put("loginId",loginId);
-            mApi.login(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+            TDAnalyticsAPI.login(loginId, appId);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void logout(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId",readableMap.getString("appid"));
-            }
-            mApi.logout(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+            String appId = readableMap.getString("appId");
+            TDAnalyticsAPI.logout(appId);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void userSet(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId", readableMap.getString("appid"));
-            }
-            if (readableMap.hasKey("properties")) {
-                json.put("properties", convertToJSONObject(readableMap.getMap("properties")));
-            }
-            mApi.userSet(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+            String appId = readableMap.getString("appId");
+            JSONObject properties = convertToJSONObject(readableMap.getMap("properties"));
+            TDAnalyticsAPI.userSet(properties, appId);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void userUnset(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId",readableMap.getString("appid"));
-            }
-            if (readableMap.hasKey("properties")) {
-                JSONArray jsonArray = new JSONArray();
-                json.put("properties",jsonArray.put(readableMap.getString("properties")));
-            }
-            mApi.userUnset(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+            String appId = readableMap.getString("appId");
+            String property = readableMap.getString("property");
+            TDAnalyticsAPI.userUnset(property, appId);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void userSetOnce(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId", readableMap.getString("appid"));
-            }
-            if (readableMap.hasKey("properties")) {
-                json.put("properties", convertToJSONObject(readableMap.getMap("properties")));
-            }
-            mApi.userSetOnce(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+            String appId = readableMap.getString("appId");
+            JSONObject properties = convertToJSONObject(readableMap.getMap("properties"));
+            TDAnalyticsAPI.userSetOnce(properties, appId);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void userAdd(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId", readableMap.getString("appid"));
-            }
-            if (readableMap.hasKey("properties")) {
-                json.put("properties", convertToJSONObject(readableMap.getMap("properties")));
-            }
-            mApi.userAdd(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+            String appId = readableMap.getString("appId");
+            JSONObject properties = convertToJSONObject(readableMap.getMap("properties"));
+            TDAnalyticsAPI.userAdd(properties, appId);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void userDel(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId",readableMap.getString("appid"));
-            }
-            mApi.userDel(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+            String appId = readableMap.getString("appId");
+            TDAnalyticsAPI.userDelete(appId);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void userAppend(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId", readableMap.getString("appid"));
-            }
-            if (readableMap.hasKey("properties")) {
-                json.put("properties",convertToJSONObject(readableMap.getMap("properties")));
-            }
-            mApi.userAppend(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+            String appId = readableMap.getString("appId");
+            JSONObject properties = convertToJSONObject(readableMap.getMap("properties"));
+            TDAnalyticsAPI.userAppend(properties, appId);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void setSuperProperties(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId", readableMap.getString("appid"));
-            }
-            if (readableMap.hasKey("properties")) {
-                json.put("properties", convertToJSONObject(readableMap.getMap("properties")));
-            }
-            mApi.setSuperProperties(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+            String appId = readableMap.getString("appId");
+            JSONObject properties = convertToJSONObject(readableMap.getMap("properties"));
+            TDAnalyticsAPI.setSuperProperties(properties, appId);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void unsetSuperProperty(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId", readableMap.getString("appid"));
-            }
-            if (readableMap.hasKey("properties")) {
-                json.put("property", readableMap.getString("properties"));
-            }
-            mApi.unsetSuperProperty(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+            String appId = readableMap.getString("appId");
+            String property = readableMap.getString("property");
+            TDAnalyticsAPI.unsetSuperProperty(property, appId);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void clearSuperProperties(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId", readableMap.getString("appid"));
-            }
-            mApi.clearSuperProperties(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+            String appId = readableMap.getString("appId");
+            TDAnalyticsAPI.clearSuperProperties(appId);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void identify(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId", readableMap.getString("appid"));
-            }
-            if (readableMap.hasKey("distinctId")) {
-                json.put("distinctId", readableMap.getString("distinctId"));
-            }
-            mApi.identify(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+            String appId = readableMap.getString("appId");
+            String distinctId = readableMap.getString("distinctId");
+            TDAnalyticsAPI.setDistinctId(distinctId, appId);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void flush(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId",readableMap.getString("appid"));
-            }
-            mApi.flush(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    @ReactMethod
-    public void enableTracking(ReadableMap readableMap) {
-        try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId",readableMap.getString("appid"));
-            }
-            boolean enableTracking = false;
-            if (readableMap.hasKey("enableTracking")) {
-                enableTracking = readableMap.getBoolean("enableTracking");
-                if (enableTracking) {
-                    json.put("status", "normal");
-                } else {
-                    json.put("status", "pause");
-                }
-            }
-            mApi.setTrackStatus(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    @ReactMethod
-    public void optInTracking(ReadableMap readableMap) {
-        try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId",readableMap.getString("appid"));
-            }
-            json.put("status", "normal");
-            mApi.setTrackStatus(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    @ReactMethod
-    public void optOutTracking(ReadableMap readableMap) {
-        try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId",readableMap.getString("appid"));
-            }
-            json.put("status", "stop");
-            mApi.setTrackStatus(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    @ReactMethod
-    public void optOutTrackingAndDeleteUser(ReadableMap readableMap) {
-        try {
-            String appid = null;
-            if (readableMap.hasKey("appid")) {
-                appid = readableMap.getString("appid");
-            }
-            ThinkingAnalyticsSDK.sharedInstance(getReactApplicationContext(), appid).optOutTrackingAndDeleteUser();
-        } catch (Exception e) {
-            e.printStackTrace();
+            String appId = readableMap.getString("appId");
+            TDAnalyticsAPI.flush(appId);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void enableAutoTrack(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            if (readableMap.hasKey("appid")) {
-                json.put("appId",readableMap.getString("appid"));
+            String appId = readableMap.getString("appId");
+            int types = ( int ) readableMap.getDouble("autoTrackType");
+            JSONObject properties = convertToJSONObject(readableMap.getMap("properties"));
+            TDAnalyticsAPI.enableAutoTrack(types, properties, appId);
+            isEnableAutoTrack = true;
+            if ((types & TDAnalytics.TDAutoTrackEventType.APP_VIEW_SCREEN) > 0) {
+                isEnablePageView = true;
+                for (JSONObject jsonObject : previewPageViewList) {
+                    TDAnalytics.track("ta_app_view", jsonObject);
+                }
+                previewPageViewList.clear();
+            } else {
+                isEnablePageView = false;
+                previewPageViewList.clear();
             }
-            ReadableMap autoTrackType = null;
-            if (readableMap.hasKey("autoTrackType")) {
-                autoTrackType = readableMap.getMap("autoTrackType");
-            }
-            if(autoTrackType == null) return;
-
-            JSONArray jsonArray = new JSONArray();
-            if (autoTrackType.hasKey("appStart")) {
-                jsonArray.put("appStart");
-            }
-            if (autoTrackType.hasKey("appEnd")) {
-                jsonArray.put("appEnd");
-            }
-            if (autoTrackType.hasKey("appViewCrash")) {
-                jsonArray.put("appCrash");
-            }
-            if (autoTrackType.hasKey("appInstall")) {
-                jsonArray.put("appInstall");
-            }
-            json.put("autoTrack",jsonArray);
-            mApi.enableAutoTrack(json.toString());
-        } catch (Exception e) {
-            e.printStackTrace();
+            isEnableViewClick = (types & TDAnalytics.TDAutoTrackEventType.APP_CLICK) > 0;
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void calibrateTime(ReadableMap readableMap) {
         try {
-            double timeStampMillis = 0;
-            if (readableMap.hasKey("timeStampMillis")) {
-                timeStampMillis = readableMap.getDouble("timeStampMillis");
-            }
-            mApi.calibrateTime(( long ) timeStampMillis);
-        } catch (Exception e) {
-            e.printStackTrace();
+            double timeStampMillis = readableMap.getDouble("timeStampMillis");
+            TDAnalytics.calibrateTime(( long ) timeStampMillis);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void calibrateTimeWithNtp(ReadableMap readableMap) {
         try {
-            String ntp_server = null;
-            if (readableMap.hasKey("ntp_server")) {
-                ntp_server = readableMap.getString("ntp_server");
-            }
-            mApi.calibrateTimeWithNtp(ntp_server);
-        } catch (Exception e) {
-            e.printStackTrace();
+            String ntp_server = readableMap.getString("ntp_server");
+            TDAnalytics.calibrateTimeWithNtp(ntp_server);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
-    public void enableThirdPartySharing(ReadableMap readableMap){
+    public void enableThirdPartySharing(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            String appid = readableMap.getString("appid");
-            if(TextUtils.isEmpty(appid)) return;
-            json.put("appId",appid);
+            String appId = readableMap.getString("appId");
             if (readableMap.hasKey("types")) {
-                ReadableArray shareTypes = readableMap.getArray("types");
-                if (null == shareTypes) return;
-                JSONArray jsonArray = new JSONArray();
-                for (int i = 0; i < shareTypes.size(); i++) {
-                    switch (shareTypes.getString(i)) {
-                        case "AppsFlyer":
-                            jsonArray.put("AppsFlyer");
-                            break;
-                        case "IronSource":
-                            jsonArray.put("IronSource");
-                            break;
-                        case "Adjust":
-                            jsonArray.put("Adjust");
-                            break;
-                        case "Branch":
-                            jsonArray.put("Branch");
-                            break;
-                        case "TopOn":
-                            jsonArray.put("TopOn");
-                            break;
-                        case "Tracking":
-                            jsonArray.put("Tracking");
-                            break;
-                        case "TradPlus":
-                            jsonArray.put("TradPlus");
-                            break;
-                    }
-                }
-                json.put("types",jsonArray);
-            } else if (readableMap.hasKey("type")) {
-                String type = readableMap.getString("type");
-                if (type == null) return;
+                int types = ( int ) readableMap.getDouble("types");
                 ReadableMap maps = readableMap.getMap("params");
-                json.put("params",convertToJSONObject(maps));
-                json.put("type",type);
+                if (maps == null) {
+                    TDAnalyticsAPI.enableThirdPartySharing(types, appId);
+                } else {
+                    TDAnalyticsAPI.enableThirdPartySharing(types, maps.toHashMap(), appId);
+                }
             }
-            mApi.enableThirdPartySharing(json.toString());
-        }catch (Exception e){
+        } catch (Exception ignore) {
 
         }
     }
@@ -622,56 +445,49 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void userUniqAppend(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            String appid = readableMap.getString("appid");
-            if (TextUtils.isEmpty(appid)) return;
-            json.put("appId", appid);
-            if (readableMap.hasKey("properties")) {
-                json.put("properties", convertToJSONObject(readableMap.getMap("properties")));
-            }
-            mApi.userUniqAppend(json.toString());
-        } catch (Exception e) {
-
+            String appId = readableMap.getString("appId");
+            JSONObject properties = convertToJSONObject(readableMap.getMap("properties"));
+            TDAnalyticsAPI.userUniqAppend(properties, appId);
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
     public void setTrackStatus(ReadableMap readableMap) {
         try {
-            JSONObject json = new JSONObject();
-            String appid = readableMap.getString("appid");
-            if (TextUtils.isEmpty(appid)) return;
-            json.put("appId",appid);
+            String appId = readableMap.getString("appId");
             String status = readableMap.getString("status");
-            json.put("status",status);
-            mApi.setTrackStatus(json.toString());
-        } catch (Exception e) {
-
+            if ("pause".equals(status)) {
+                TDAnalyticsAPI.setTrackStatus(TDAnalytics.TDTrackStatus.PAUSE, appId);
+            } else if ("stop".equals(status)) {
+                TDAnalyticsAPI.setTrackStatus(TDAnalytics.TDTrackStatus.STOP, appId);
+            } else if ("saveOnly".equals(status)) {
+                TDAnalyticsAPI.setTrackStatus(TDAnalytics.TDTrackStatus.SAVE_ONLY, appId);
+            } else {
+                TDAnalyticsAPI.setTrackStatus(TDAnalytics.TDTrackStatus.NORMAL, appId);
+            }
+        } catch (Exception ignore) {
         }
     }
 
     @ReactMethod
-    public void getPresetProperties(ReadableMap readableMap, Promise promise){
+    public void getPresetProperties(ReadableMap readableMap, Promise promise) {
         try {
-            JSONObject json = new JSONObject();
-            String appid = readableMap.getString("appid");
-            json.put("appId",appid);
-            String properties = mApi.getPresetProperties(json.toString());
-            promise.resolve(convertToMap(new JSONObject(properties)));
-        }catch (Exception e){
+            String appId = readableMap.getString("appId");
+            TDPresetProperties presetProperties = TDAnalyticsAPI.getPresetProperties(appId);
+            promise.resolve(convertToMap(presetProperties.toEventPresetProperties()));
+        } catch (Exception e) {
             promise.resolve(null);
         }
     }
 
     @ReactMethod
-    public void getSuperProperties(ReadableMap readableMap, Promise promise){
+    public void getSuperProperties(ReadableMap readableMap, Promise promise) {
         try {
-            JSONObject json = new JSONObject();
-            String appid = readableMap.getString("appid");
-            json.put("appId",appid);
-            String properties = mApi.getSuperProperties(json.toString());
-            promise.resolve(convertToMap(new JSONObject(properties)));
-        }catch (Exception e){
+            String appId = readableMap.getString("appId");
+            JSONObject superProperties = TDAnalyticsAPI.getSuperProperties(appId);
+            promise.resolve(convertToMap(superProperties));
+        } catch (Exception e) {
             promise.resolve(null);
         }
     }
@@ -679,10 +495,8 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void getDistinctId(ReadableMap readableMap, Promise promise) {
         try {
-            JSONObject json = new JSONObject();
-            String appid = readableMap.getString("appid");
-            json.put("appId",appid);
-            String distinctId = mApi.getDistinctId(json.toString());
+            String appId = readableMap.getString("appId");
+            String distinctId = TDAnalyticsAPI.getDistinctId(appId);
             promise.resolve(distinctId);
         } catch (Exception e) {
             promise.resolve(null);
@@ -690,61 +504,151 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void getDeviceId(ReadableMap readableMap, Promise promise){
+    public void getAccountId(ReadableMap readableMap, Promise promise) {
         try {
-            JSONObject json = new JSONObject();
-            String appid = readableMap.getString("appid");
-            json.put("appId",appid);
-            String deviceId = mApi.getDeviceId(json.toString());
+            String appId = readableMap.getString("appId");
+            String accountId = TDAnalyticsAPI.getAccountId(appId);
+            promise.resolve(accountId);
+        } catch (Exception e) {
+            promise.resolve(null);
+        }
+    }
+
+    @ReactMethod
+    public void getDeviceId(ReadableMap readableMap, Promise promise) {
+        try {
+            String appId = readableMap.getString("appId");
+            String deviceId = TDAnalyticsAPI.getDeviceId(appId);
             promise.resolve(deviceId);
         } catch (Exception e) {
             promise.resolve(null);
         }
     }
 
-
     @ReactMethod
-    public void setAutoTrackProperties(ReadableMap readableMap) {
+    public void trackViewScreen(ReadableMap params) {
         try {
-            JSONObject json = new JSONObject();
-            String appid = readableMap.getString("appid");
-            if (TextUtils.isEmpty(appid)) return;
-            json.put("appId",appid);
-            if (readableMap.hasKey("types") && readableMap.hasKey("properties")) {
-                ReadableMap mapProperties = readableMap.getMap("properties");
-                json.put("properties",convertToJSONObject(mapProperties));
-                ReadableArray autoTrack = readableMap.getArray("types");
-                JSONArray jsonArray = new JSONArray();
-                if (null != autoTrack) {
-                    for (int i = 0; i < autoTrack.size(); i++) {
-                        if (TextUtils.equals(autoTrack.getString(i), "appStart")) {
-                            jsonArray.put("appStart");
-                        } else if (TextUtils.equals(autoTrack.getString(i), "appEnd")) {
-                            jsonArray.put("appEnd");
-                        } else if (TextUtils.equals(autoTrack.getString(i), "appInstall")) {
-                            jsonArray.put("appInstall");
-                        } else if (TextUtils.equals(autoTrack.getString(i), "appViewCrash")) {
-                            jsonArray.put("appCrash");
-                        }
-                    }
-                    if(jsonArray.length() >0){
-                        json.put("autoTrack",jsonArray);
-                        mApi.setAutoTrackProperties(json.toString());
-                    }
+            JSONObject json = convertToJSONObject(params);
+            String tdUrl = json.optString("thinkingdataurl");
+            JSONObject properties = json.optJSONObject("thinkingdataparams");
+            if (properties == null) {
+                properties = new JSONObject();
+            }
+            boolean isIgnore = properties.optBoolean("TDIgnoreViewScreen");
+            if (isIgnore) return;
+            properties.remove("TDIgnoreViewScreen");
+            if (!properties.has("#title")) {
+                properties.put("#title", tdUrl);
+            }
+            if (!TextUtils.isEmpty(lastScreenName)) {
+                properties.put("#referrer", lastScreenName);
+            }
+            if (!properties.has("#screen_name")) {
+                lastScreenName = tdUrl;
+                properties.put("#screen_name", tdUrl);
+            } else {
+                lastScreenName = properties.optString("#screen_name");
+            }
+            mCurrentTitle = properties.optString("#title");
+            mCurrentScreenName = properties.optString("#screen_name");
+            if (isEnableAutoTrack) {
+                if (isEnablePageView) {
+                    TDAnalytics.track("ta_app_view", properties);
+                }
+            } else {
+                if (previewPageViewList.size() < 5) {
+                    previewPageViewList.add(properties);
                 }
             }
-        } catch (Exception e) {
+        } catch (Exception ignore) {
 
         }
     }
 
+    @ReactMethod
+    public void trackViewClick(int viewId) {
+        try {
+            if(!isEnableViewClick) return;
+            TDViewProperties viewInfo = viewPropertiesMap.get(viewId);
+            if (viewInfo != null && !viewInfo.isIgnore) {
+                if (viewInfo.params == null) {
+                    viewInfo.params = new JSONObject();
+                }
+                viewInfo.params.put("#element_content", viewInfo.elementContent);
+                viewInfo.params.put("#title",mCurrentTitle);
+                viewInfo.params.put("#screen_name",mCurrentScreenName);
+                TDAnalytics.track("ta_app_click", viewInfo.params);
+            }
+        } catch (Exception ignore) {
+
+        }
+    }
+
+    @ReactMethod
+    public void saveViewProperties(int viewId, String title, ReadableMap viewProperties) {
+        viewPropertiesMap.put(viewId, new TDViewProperties(title, readMapToJson(viewProperties)));
+    }
+
+    private JSONObject readMapToJson(ReadableMap map) {
+        JSONObject params = new JSONObject();
+        if (null == map) return params;
+        try {
+            ReadableMapKeySetIterator iterator = map.keySetIterator();
+            while (iterator.hasNextKey()) {
+                String key = iterator.nextKey();
+                if (map.getType(key) == ReadableType.Map) {
+                    ReadableMap newMap = map.getMap(key);
+                    if (null != newMap) {
+                        params.put(key, readMapToJson(newMap));
+                    }
+                } else if (map.getType(key) == ReadableType.String) {
+                    params.put(key, map.getString(key));
+                } else if (map.getType(key) == ReadableType.Boolean) {
+                    params.put(key, map.getBoolean(key));
+                } else if (map.getType(key) == ReadableType.Number) {
+                    params.put(key, map.getDouble(key));
+                } else if (map.getType(key) == ReadableType.Array) {
+                    ReadableArray newArray = map.getArray(key);
+                    if (null != newArray) {
+                        params.put(key, readArrayToJsonArray(newArray));
+                    }
+                }
+            }
+        } catch (Exception ignore) {
+        }
+        return params;
+    }
+
+    private JSONArray readArrayToJsonArray(ReadableArray array) {
+        JSONArray list = new JSONArray();
+        if (null == array) return list;
+        try {
+            for (int i = 0; i < array.size(); i++) {
+                if (array.getType(i) == ReadableType.Map) {
+                    list.put(readMapToJson(array.getMap(i)));
+                } else if (array.getType(i) == ReadableType.String) {
+                    list.put(array.getString(i));
+                } else if (array.getType(i) == ReadableType.Boolean) {
+                    list.put(array.getBoolean(i));
+                } else if (array.getType(i) == ReadableType.Number) {
+                    list.put(array.getDouble(i));
+                } else if (array.getType(i) == ReadableType.Array) {
+                    list.put(readArrayToJsonArray(array.getArray(i)));
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return list;
+    }
+
     private WritableMap convertToMap(JSONObject json) {
         if (json == null || json.length() == 0) {
-            return null;
+            return Arguments.createMap();
         }
         WritableMap writableMap = Arguments.createMap();
         Iterator<String> it = json.keys();
-        while(it.hasNext()){
+        while (it.hasNext()) {
             try {
                 String key = it.next();
                 writableMap.putString(key, json.optString(key));
@@ -753,50 +657,6 @@ public class RNThinkingAnalyticsModule extends ReactContextBaseJavaModule {
             }
         }
         return writableMap;
-    }
-
-    private Map<String, Object> readMapToMap(ReadableMap map) {
-        Map<String, Object> params = new HashMap<>();
-        ReadableMapKeySetIterator iterator = map.keySetIterator();
-        while (iterator.hasNextKey()) {
-            String key = iterator.nextKey();
-            if (map.getType(key) == ReadableType.Map) {
-                ReadableMap newMap = map.getMap(key);
-                if (null != newMap) {
-                    params.put(key, readMapToMap(newMap));
-                }
-            } else if (map.getType(key) == ReadableType.String) {
-                params.put(key, map.getString(key));
-            } else if (map.getType(key) == ReadableType.Boolean) {
-                params.put(key, map.getBoolean(key));
-            } else if (map.getType(key) == ReadableType.Number) {
-                params.put(key, map.getDouble(key));
-            } else if (map.getType(key) == ReadableType.Array) {
-                ReadableArray newArray = map.getArray(key);
-                if(null != newArray) {
-                    params.put(key, readArrayToList(newArray));
-                }
-            }
-        }
-        return params;
-    }
-
-    private List<Object> readArrayToList(ReadableArray array) {
-        List<Object> list = new ArrayList<>();
-        for (int i = 0; i < array.size(); i++) {
-            if (array.getType(i) == ReadableType.Map) {
-                list.add(readMapToMap(array.getMap(i)));
-            } else if (array.getType(i) == ReadableType.String) {
-                list.add(array.getString(i));
-            } else if (array.getType(i) == ReadableType.Boolean) {
-                list.add(array.getBoolean(i));
-            } else if (array.getType(i) == ReadableType.Number) {
-                list.add(array.getDouble(i));
-            } else if (array.getType(i) == ReadableType.Array) {
-                list.add(readArrayToList(array.getArray(i)));
-            }
-        }
-        return list;
     }
 
 }

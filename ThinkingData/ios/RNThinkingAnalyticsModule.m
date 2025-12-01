@@ -1,516 +1,524 @@
-// Thinkingdata RN SDK v2.1.0
 #import "RNThinkingAnalyticsModule.h"
 #import <React/RCTBridge.h>
 #import <React/RCTEventDispatcher.h>
-#import <ThinkingSDK/ThinkingAnalyticsSDK.h>
-#import <TAGameEngine/ThinkingGameEngineApi.h>
-
-ThinkingGameEngineApi* mApi = nil;
+#import <ThinkingSDK/ThinkingSDK.h>
 
 @implementation RNThinkingAnalyticsModule
 
 RCT_EXPORT_MODULE(RNThinkingAnalyticsModule)
 
-RCT_EXPORT_METHOD(init:(NSDictionary *)options libVersion:(NSString *)libVersion) {
-  @try {
-      mApi = [[ThinkingGameEngineApi alloc]init];
-      NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-      if ([options objectForKey:@"timeZone"]) {
-          [mDict setValue:[options objectForKey:@"timeZone"] forKey:@"timeZone"];
-      }
-      if ([[options objectForKey:@"mode"] isEqualToString:@"debug"]) {
-          [mDict setValue:@"1" forKey:@"mode"];
-      } else if ([[options objectForKey:@"mode"] isEqualToString:@"debugOnly"]) {
-          [mDict setValue:@"2" forKey:@"mode"];
-      }else{
-          [mDict setValue:@"0" forKey:@"mode"];
-      }
-      if([options objectForKey:@"enableEncrypt"]){
-          [mDict setValue:[options objectForKey:@"enableEncrypt"] forKey:@"enableEncrypt"];
-      }
-      if([options objectForKey:@"secretKey"]){
-          NSDictionary *secretKey = (NSDictionary *)[options objectForKey:@"secretKey"];
-          [mDict setValue:secretKey forKey:@"secretKey"];
-      }
-      NSString *appId = [options objectForKey:@"appid"];
-      NSString *serverUrl = [options objectForKey:@"serverUrl"];
-      [mDict setValue:appId forKey:@"appId"];
-      [mDict setValue:serverUrl forKey:@"serverUrl"];
-      
-      if([options objectForKey:@"enableLog"]){
-          NSNumber* enableLog = [options objectForKey:@"enableLog"];
-          if(enableLog.boolValue){
-              [mApi enableTrackLog:true];
-          }
-      }
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _previewPageViewList = [NSMutableArray array];
+        _isEnableAutoTrack = NO;
+        _isEnablePageView = NO;
+        _lastScreenName = @"";
+        _mCurrentScreenName = @"";
+        _mCurrentTitle = @"";
+        _viewPropertiesMap = [NSMutableDictionary dictionary];
+        _isEnableViewClick = NO;
+    }
+    return self;
+}
 
-      [mApi sharedInstance:[self toJSONData:mDict]];
-    
-      [mApi setCustomerLibInfo:@"ReactNative" libVersion:libVersion];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+- (NSTimeZone *)getTimeZone:(NSNumber *)number {
+    if (!number || [number doubleValue] <= 0) {
+        return [NSTimeZone defaultTimeZone];
+    }
+    NSTimeInterval hoursOffset = [number doubleValue];
+    NSTimeInterval secondsOffset = hoursOffset * 3600;
+    return [NSTimeZone timeZoneForSecondsFromGMT:secondsOffset];
+}
+
+RCT_EXPORT_METHOD(init:(NSDictionary *)options libVersion:(NSString *)libVersion) {
+    @try {
+        
+        TDConfig *config = [[TDConfig alloc]init];
+        config.appid = options[@"appId"];
+        config.serverUrl = options[@"serverUrl"];
+        if([@"debug" isEqualToString: options[@"mode"]]){
+            config.mode = TDModeDebug;
+        }else if([@"debugOnly" isEqualToString:options[@"mode"]]){
+            config.mode = TDModeDebugOnly;
+        }
+        if (options[@"timeZone"]) {
+            config.defaultTimeZone = [self getTimeZone:options[@"timeZone"]];
+        }
+        if(options[@"enableEncrypt"] && options[@"secretKey"]){
+            bool enableEncrypt = options[@"enableEncrypt"];
+            if(enableEncrypt){
+                NSDictionary *secretKey = (NSDictionary *)options[@"secretKey"];
+                if(secretKey){
+                    NSUInteger version = [secretKey[@"version"] unsignedIntegerValue];
+                    [config enableEncryptWithVersion:version publicKey:secretKey[@"publicKey"]];
+                }
+            }
+        }
+        
+        if(options[@"enableLog"]){
+            NSNumber* enableLog = options[@"enableLog"];
+            [TDAnalytics enableLog:enableLog.boolValue];
+        }
+        [TDAnalytics setCustomerLibInfoWithLibName:@"ReactNative" libVersion:libVersion];
+        [TDAnalytics startAnalyticsWithConfig:config];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(track:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    NSString *appid = [options objectForKey:@"appid"];
-    [mDict setValue:appid forKey:@"appId"];
-    NSString *eventName = [options objectForKey:@"eventName"];
-    [mDict setValue:eventName forKey:@"eventName"];
-    NSDictionary *properties = [options objectForKey:@"properties"];
-    [mDict setValue:properties forKey:@"properties"];
-    if ([options objectForKey:@"time"]) {
-        [mDict setValue:[options objectForKey:@"time"] forKey:@"time"];
+    @try {
+        
+        NSString *appId = options[@"appId"];
+        NSString *eventName = options[@"eventName"];
+        NSDictionary *properties = options[@"properties"];
+        NSDate *date;
+        NSTimeZone *timeZone;
+        if (options[@"time"]) {
+            NSTimeInterval timestamp = [options[@"time"] doubleValue];
+            if(timestamp > 0){
+                date = [NSDate dateWithTimeIntervalSince1970:timestamp / 1000.0];
+            }
+        }
+        if (options[@"timeZone"]) {
+            timeZone = [self getTimeZone:options[@"timeZone"]];
+        }
+        [TDAnalytics track:eventName properties:properties time:date timeZone:timeZone withAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
     }
-    NSString *timeZone = [options objectForKey:@"timeZone"];
-    [mDict setValue:timeZone forKey:@"timeZone"];
-    [mApi track:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
 }
 
 RCT_EXPORT_METHOD(trackUpdate:(NSDictionary *)options) {
-  @try {
-      NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-      [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-      [mDict setValue:[options objectForKey:@"eventName"] forKey:@"eventName"];
-      [mDict setValue:[options objectForKey:@"eventId"] forKey:@"eventId"];
-      [mDict setValue:[options objectForKey:@"properties"] forKey:@"properties"];
-      if ([options objectForKey:@"time"]) {
-          [mDict setValue:[options objectForKey:@"time"] forKey:@"time"];
-      }
-      [mDict setValue:[options objectForKey:@"timeZone"] forKey:@"timeZone"];
-      [mDict setValue:@"1" forKey:@"type"];
-      [mApi trackEvent:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-      NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        NSString *eventName = options[@"eventName"];
+        NSString *eventId = options[@"eventId"];
+        NSDate *date;
+        NSTimeZone *timeZone;
+        if (options[@"time"]) {
+            NSTimeInterval timestamp = [options[@"time"] doubleValue];
+            if(timestamp > 0){
+                date = [NSDate dateWithTimeIntervalSince1970:timestamp / 1000.0];
+            }
+        }
+        if (options[@"timeZone"]) {
+            timeZone = [self getTimeZone:options[@"timeZone"]];
+        }
+        TDUpdateEventModel *model = [[TDUpdateEventModel alloc] initWithEventName:eventName eventID:eventId];
+        model.properties = options[@"properties"];
+        [model configTime:date timeZone:timeZone];
+        [TDAnalytics trackWithEventModel:model withAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(trackOverwrite:(NSDictionary *)options) {
-  @try {
-        NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-        [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-        [mDict setValue:[options objectForKey:@"eventName"] forKey:@"eventName"];
-        [mDict setValue:[options objectForKey:@"eventId"] forKey:@"eventId"];
-        [mDict setValue:[options objectForKey:@"properties"] forKey:@"properties"];
-        if ([options objectForKey:@"time"]) {
-            [mDict setValue:[options objectForKey:@"time"] forKey:@"time"];
+    @try {
+        NSString *appId = options[@"appId"];
+        NSString *eventName = options[@"eventName"];
+        NSString *eventId = options[@"eventId"];
+        NSDate *date;
+        NSTimeZone *timeZone;
+        if (options[@"time"]) {
+            NSTimeInterval timestamp = [options[@"time"] doubleValue];
+            if(timestamp > 0){
+                date = [NSDate dateWithTimeIntervalSince1970:timestamp / 1000.0];
+            }
         }
-        [mDict setValue:[options objectForKey:@"timeZone"] forKey:@"timeZone"];
-        [mDict setValue:@"2" forKey:@"type"];
-        [mApi trackEvent:[self toJSONData:mDict]];
+        if (options[@"timeZone"]) {
+            timeZone = [self getTimeZone:options[@"timeZone"]];
+        }
+        TDOverwriteEventModel *model = [[TDOverwriteEventModel alloc]initWithEventName:eventName eventID:eventId];
+        model.properties = options[@"properties"];
+        [model configTime:date timeZone:timeZone];
+        [TDAnalytics trackWithEventModel:model withAppId:appId];
     } @catch (NSException *exception) {
         NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
     }
 }
 
 RCT_EXPORT_METHOD(trackFirstEvent:(NSDictionary *)options) {
-  @try {
-        NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-        [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-        [mDict setValue:[options objectForKey:@"eventName"] forKey:@"eventName"];
-        [mDict setValue:[options objectForKey:@"eventId"] forKey:@"eventId"];
-        [mDict setValue:[options objectForKey:@"properties"] forKey:@"properties"];
-        if ([options objectForKey:@"time"]) {
-            [mDict setValue:[options objectForKey:@"time"] forKey:@"time"];
+    @try {
+        NSString *appId = options[@"appId"];
+        NSString *eventName = options[@"eventName"];
+        NSString *eventId = options[@"eventId"];
+        NSDate *date;
+        NSTimeZone *timeZone;
+        if (options[@"time"]) {
+            NSTimeInterval timestamp = [options[@"time"] doubleValue];
+            if(timestamp > 0){
+                date = [NSDate dateWithTimeIntervalSince1970:timestamp / 1000.0];
+            }
         }
-        [mDict setValue:[options objectForKey:@"timeZone"] forKey:@"timeZone"];
-        [mDict setValue:@"0" forKey:@"type"];
-        [mApi trackEvent:[self toJSONData:mDict]];
+        if (options[@"timeZone"]) {
+            timeZone = [self getTimeZone:options[@"timeZone"]];
+        }
+        TDFirstEventModel *model = [[TDFirstEventModel alloc]initWithEventName:eventName firstCheckID:eventId];
+        model.properties = options[@"properties"];
+        [model configTime:date timeZone:timeZone];
+        [TDAnalytics trackWithEventModel:model withAppId:appId];
     } @catch (NSException *exception) {
         NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
     }
 }
 
 RCT_EXPORT_METHOD(timeEvent:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    [mDict setValue:[options objectForKey:@"eventName"] forKey:@"eventName"];
-    [mApi timeEvent:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        NSString *eventName = options[@"eventName"];
+        [TDAnalytics timeEvent:eventName withAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(login:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    [mDict setValue:[options objectForKey:@"loginId"] forKey:@"loginId"];
-    [mApi login:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        NSString *loginId = options[@"loginId"];
+        [TDAnalytics login:loginId withAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(logout:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    [mApi logout:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        [TDAnalytics logoutWithAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(userSet:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    [mDict setValue:[options objectForKey:@"properties"] forKey:@"properties"];
-    [mApi userSet:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        [TDAnalytics userSet:options[@"properties"] withAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(userUnset:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    NSString *property = [options objectForKey:@"properties"];
-    NSMutableArray* array = [[NSMutableArray alloc]init];
-    [array addObject:property];
-    [mDict setValue:array forKey:@"properties"];
-    [mApi userUnset:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        [TDAnalytics userUnset:options[@"property"] withAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(userSetOnce:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    [mDict setValue:[options objectForKey:@"properties"] forKey:@"properties"];
-    [mApi userSetOnce:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        [TDAnalytics userSetOnce:options[@"properties"] withAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(userAdd:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    [mDict setValue:[options objectForKey:@"properties"] forKey:@"properties"];
-    [mApi userAdd:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        [TDAnalytics userAdd:options[@"properties"] withAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(userDel:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    [mApi userDel:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        [TDAnalytics userDeleteWithAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(userAppend:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    [mDict setValue:[options objectForKey:@"properties"] forKey:@"properties"];
-    [mApi userAppend:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        [TDAnalytics userAppend:options[@"properties"] withAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(userUniqAppend:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    [mDict setValue:[options objectForKey:@"properties"] forKey:@"properties"];
-    [mApi userUniqAppend:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        [TDAnalytics userUniqAppend:options[@"properties"] withAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 
 RCT_EXPORT_METHOD(setSuperProperties:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    [mDict setValue:[options objectForKey:@"properties"] forKey:@"properties"];
-    [mApi setSuperProperties:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        [TDAnalytics setSuperProperties:options[@"properties"] withAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(unsetSuperProperty:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    [mDict setValue:[options objectForKey:@"properties"] forKey:@"property"];
-    [mApi unsetSuperProperty:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        [TDAnalytics unsetSuperProperty:options[@"property"] withAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(clearSuperProperties:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    [mApi clearSuperProperties:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        [TDAnalytics clearSuperPropertiesWithAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(identify:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    [mDict setValue:[options objectForKey:@"distinctId"] forKey:@"distinctId"];
-    [mApi identify:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        [TDAnalytics setDistinctId:options[@"distinctId"] withAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(flush:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    [mApi flush:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
-}
-
-RCT_EXPORT_METHOD(enableTracking:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    BOOL enableTracking = [[options objectForKey:@"enableTracking"] boolValue];
-    if(enableTracking){
-        [mDict setValue:@"normal" forKey:@"status"];
-    }else{
-        [mDict setValue:@"pause" forKey:@"status"];
+    @try {
+        NSString *appId = options[@"appId"];
+        [TDAnalytics flushWithAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
     }
-    [mApi setTrackStatus:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
-}
-
-RCT_EXPORT_METHOD(optInTracking:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    [mDict setValue:@"normal" forKey:@"status"];
-    [mApi setTrackStatus:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
-}
-
-RCT_EXPORT_METHOD(optOutTracking:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    [mDict setValue:@"stop" forKey:@"status"];
-    [mApi setTrackStatus:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
-}
-
-RCT_EXPORT_METHOD(optOutTrackingAndDeleteUser:(NSDictionary *)options) {
-  @try {
-    NSString *appid = [options objectForKey:@"appid"];
-    if (appid) {
-      [[ThinkingAnalyticsSDK sharedInstanceWithAppid:appid] optOutTrackingAndDeleteUser];
-    } else {
-      [[ThinkingAnalyticsSDK sharedInstance] optOutTrackingAndDeleteUser];
-    }
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
 }
 
 RCT_EXPORT_METHOD(enableAutoTrack:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-      [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-      NSDictionary *autoTrackType = [options objectForKey:@"autoTrackType"];
-      BOOL appStart = [[autoTrackType objectForKey:@"appStart"] boolValue];
-      BOOL appEnd = [[autoTrackType objectForKey:@"appEnd"] boolValue];
-      BOOL appViewCrash = [[autoTrackType objectForKey:@"appViewCrash"] boolValue];
-      BOOL appInstall = [[autoTrackType objectForKey:@"appInstall"] boolValue];
-      NSMutableArray* array = [[NSMutableArray alloc]init];
-      if(appStart){
-          [array addObject:@"appStart"];
-      }
-      if(appEnd){
-          [array addObject:@"appEnd"];
-      }
-      if(appViewCrash){
-          [array addObject:@"appCrash"];
-      }
-      if(appInstall){
-          [array addObject:@"appInstall"];
-      }
-      [mDict setValue:array forKey:@"autoTrack"];
-      [mApi enableAutoTrack:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        NSInteger types = [options[@"autoTrackType"]integerValue];
+        self.isEnableAutoTrack = YES;
+        if ((types & TDAutoTrackEventTypeAppViewScreen) > 0) {
+            self.isEnablePageView = YES;
+            types &= ~TDAutoTrackEventTypeAppViewScreen;
+            for (NSDictionary *event in self.previewPageViewList) {
+                [TDAnalytics track:@"ta_app_view" properties:event];
+            }
+            [self.previewPageViewList removeAllObjects];
+        } else {
+            [self.previewPageViewList removeAllObjects];
+        }
+        self.isEnableViewClick = (types & TDAutoTrackEventTypeAppClick) > 0;
+        [TDAnalytics enableAutoTrack:types properties:options[@"properties"] withAppId:appId];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(calibrateTime:(NSDictionary *)options) {
-  @try {
-    double timeStampMillis = [[options objectForKey:@"timeStampMillis"] doubleValue];
-    [mApi calibrateTime:timeStampMillis];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        double timeStampMillis = [options[@"timeStampMillis"] doubleValue];
+        [TDAnalytics calibrateTime:timeStampMillis];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(calibrateTimeWithNtp:(NSDictionary *)options) {
-  @try {
-    NSString *ntp_server = [options objectForKey:@"ntp_server"];
-    [mApi calibrateTimeWithNtp:ntp_server];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *ntp_server = options[@"ntp_server"];
+        [TDAnalytics calibrateTimeWithNtp:ntp_server];
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(enableThirdPartySharing:(NSDictionary *)options) {
-  @try {
-      NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-      [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-      if([options objectForKey:@"types"]){
-          NSArray *shareTypes = [options objectForKey:@"types"];
-          [mDict setValue:shareTypes forKey:@"types"];
-      }else if([options objectForKey:@"type"]){
-          NSString* type = [options objectForKey:@"type"];
-          NSDictionary* params = [options objectForKey:@"params"];
-          [mDict setValue:params forKey:@"params"];
-          NSArray* array = [[NSArray alloc]initWithObjects:type, nil];
-          [mDict setValue:array forKey:@"type"];
-      }
-      [mApi enableThirdPartySharing:[self toJSONData:mDict]];  
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        if(options[@"types"]){
+            NSInteger types = [options[@"types"]integerValue];
+            if(options[@"params"]){
+                [TDAnalytics enableThirdPartySharing:types properties:options[@"params"] withAppId:appId];
+            }else{
+                [TDAnalytics enableThirdPartySharing:types withAppId:appId];
+            }
+        }
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(setTrackStatus:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    if([options objectForKey:@"status"]){
-        NSString *status = [options objectForKey:@"status"];
-        [mDict setValue:status forKey:@"status"];
-        [mApi setTrackStatus:[self toJSONData:mDict]];
+    @try {
+        NSString *appId = options[@"appId"];
+        NSString *status = options[@"status"];
+        if([@"pause" isEqualToString: status]){
+            [TDAnalytics setTrackStatus:TDTrackStatusPause withAppId:appId];
+        }else if([@"stop" isEqualToString:status]){
+            [TDAnalytics setTrackStatus:TDTrackStatusStop withAppId:appId];
+        }else if([@"saveOnly" isEqualToString:status]){
+            [TDAnalytics setTrackStatus:TDTrackStatusSaveOnly withAppId:appId];
+        }else{
+            [TDAnalytics setTrackStatus:TDTrackStatusNormal withAppId:appId];
+        }
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
     }
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
 }
 
 RCT_EXPORT_METHOD(getPresetProperties:(NSDictionary *)options :(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    NSString* preset = [mApi getPresetProperties:[self toJSONData:mDict]];
-    resolve([self toDictionary:preset]);
-  } @catch (NSException *exception) {
-    resolve(nil);
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        TDPresetProperties *presetProperties = [TDAnalytics getPresetPropertiesWithAppId:appId];
+        resolve([presetProperties toEventPresetProperties]);
+    } @catch (NSException *exception) {
+        resolve(nil);
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(getSuperProperties:(NSDictionary *)options :(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    NSString* superProperties = [mApi getSuperProperties:[self toJSONData:mDict]];
-    resolve([self toDictionary:superProperties]);
-  } @catch (NSException *exception) {
-    resolve(nil);
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        NSString *appId = options[@"appId"];
+        NSDictionary *superProperties = [TDAnalytics getSuperPropertiesWithAppId:appId];
+        resolve(superProperties);
+    } @catch (NSException *exception) {
+        resolve(nil);
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(getDistinctId:(NSDictionary *)options :(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    NSString *distinctId = [mApi getDistinctId:[self toJSONData:mDict]];
-    resolve(distinctId);
-  } @catch (NSException *exception) {
-    resolve(nil);
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
+    @try {
+        resolve([TDAnalytics getDistinctIdWithAppId:options[@"appId"]]);
+    } @catch (NSException *exception) {
+        resolve(nil);
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
+}
+
+RCT_EXPORT_METHOD(getAccountId:(NSDictionary *)options :(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject) {
+    @try {
+        resolve([TDAnalytics getAccountIdWithAppId:options[@"appId"]]);
+    } @catch (NSException *exception) {
+        resolve(nil);
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
 RCT_EXPORT_METHOD(getDeviceId:(NSDictionary *)options :(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    NSString *deviceId  = [mApi getDeviceId:[self toJSONData:mDict]];
-    resolve(deviceId);
-  } @catch (NSException *exception) {
-    resolve(nil);
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
-}
-
-RCT_EXPORT_METHOD(setAutoTrackProperties:(NSDictionary *)options) {
-  @try {
-    NSMutableDictionary *mDict =[[NSMutableDictionary alloc]init];
-    [mDict setValue:[options objectForKey:@"appid"] forKey:@"appId"];
-    [mDict setValue:[options objectForKey:@"properties"] forKey:@"properties"];
-    NSArray *autoTrackTypes = [options objectForKey:@"types"];
-    NSMutableArray *array = [[NSMutableArray alloc]init];
-    for(int i=0; i < autoTrackTypes.count; i++) {
-        NSString* value = autoTrackTypes[i];
-        if ([@"appStart" isEqualToString:value]) {
-            [array addObject:@"appStart"];
-        } else if ([@"appEnd" isEqualToString:value]) {
-            [array addObject:@"appEnd"];
-        } else if ([@"appInstall" isEqualToString:value]) {
-            [array addObject:@"appInstall"];
-        } else if ([@"appViewCrash" isEqualToString:value]) {
-            [array addObject:@"appCrash"];
-        }
+    @try {
+        resolve([TDAnalytics getDeviceId]);
+    } @catch (NSException *exception) {
+        resolve(nil);
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
     }
-    [mDict setValue:array forKey:@"autoTrack"];
-    [mApi setAutoTrackProperties:[self toJSONData:mDict]];
-  } @catch (NSException *exception) {
-    NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
-  }
 }
 
-- (NSString *)toJSONData:(NSDictionary *)dict{
-    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:dict options:NSJSONWritingPrettyPrinted error:nil];
-    NSString *jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
-    return jsonString;
+RCT_EXPORT_METHOD(trackViewScreen:(NSDictionary *)options) {
+    @try {
+        NSString *tdUrl = options[@"thinkingdataurl"];
+        NSDictionary *thinkingDataParams = options[@"thinkingdataparams"];
+        NSMutableDictionary *properties = [NSMutableDictionary dictionary];
+        if (thinkingDataParams) {
+            [properties addEntriesFromDictionary:thinkingDataParams];
+        }
+        BOOL isIgnore = [[properties objectForKey:@"TDIgnoreViewScreen"] boolValue];
+        if (isIgnore) {
+            return;
+        }
+        [properties removeObjectForKey:@"TDIgnoreViewScreen"];
+        if (!properties[@"#title"] && tdUrl) {
+            properties[@"#title"] = tdUrl;
+        }
+        if (self.lastScreenName.length > 0) {
+            properties[@"#referrer"] = self.lastScreenName;
+        }
+        if (!properties[@"#screen_name"] && tdUrl) {
+            self.lastScreenName = tdUrl;
+            properties[@"#screen_name"] = tdUrl;
+        } else if (properties[@"#screen_name"]) {
+            self.lastScreenName = properties[@"#screen_name"];
+        }
+        self.mCurrentTitle = properties[@"#title"];
+        self.mCurrentScreenName = properties[@"#screen_name"];
+        if (self.isEnableAutoTrack) {
+            if (self.isEnablePageView) {
+                [TDAnalytics track:@"ta_app_view" properties:properties];
+            }
+        } else {
+            if (self.previewPageViewList.count < 5) {
+                [self.previewPageViewList addObject:[properties copy]];
+            }
+        }
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
 }
 
-- (NSDictionary*) toDictionary:(NSString*)jsonString{
-    NSData *jsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
-    NSError *error;
-    NSDictionary *dict = [NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingMutableContainers error:&error];
-    if (error == nil) {
-        return  dict;
-    }else{
-        return [[NSDictionary alloc]init];
+RCT_EXPORT_METHOD(trackViewClick:(NSInteger)viewId) {
+    @try {
+        if(!self.isEnableViewClick) return;
+        NSNumber *viewIdKey = @(viewId);
+        NSDictionary *dict = self.viewPropertiesMap[viewIdKey];
+        if(dict && ![dict[@"isIgnore"] boolValue]){
+            NSMutableDictionary *params = dict[@"params"];
+            params[@"#element_content"] = dict[@"elementContent"];
+            params[@"#title"] = self.mCurrentTitle;
+            params[@"#screen_name"] = self.mCurrentScreenName;
+            [TDAnalytics track:@"ta_app_click" properties:params];
+        }
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
+}
+
+RCT_EXPORT_METHOD(saveViewProperties:(NSInteger)viewId
+                  title:(NSString *)title
+                  viewProperties:(NSDictionary *)viewProperties) {
+    @try {
+        NSMutableDictionary *mutableProps = [viewProperties mutableCopy] ?: [NSMutableDictionary dictionary];
+        BOOL isIgnore = NO;
+        if(mutableProps[@"TDIgnoreViewClick"]){
+            isIgnore = mutableProps[@"TDIgnoreViewClick"];
+            [mutableProps removeObjectForKey:@"TDIgnoreViewClick"];
+        }
+        self.viewPropertiesMap[@(viewId)] = @{
+            @"elementContent": title ?: @"",
+            @"params": mutableProps ?: @{},
+            @"isIgnore":@(isIgnore)
+        };
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
+    }
+}
+
+RCT_EXPORT_METHOD(saveRootViewProperties:(NSInteger)viewId title:(NSString *)title viewProperties:(NSDictionary *)viewProperties rootTag:(NSInteger)rootTag) {
+    @try {
+        NSMutableDictionary *mutableProps = [viewProperties mutableCopy] ?: [NSMutableDictionary dictionary];
+        BOOL isIgnore = NO;
+        if(mutableProps[@"TDIgnoreViewClick"]){
+            isIgnore = mutableProps[@"TDIgnoreViewClick"];
+            [mutableProps removeObjectForKey:@"TDIgnoreViewClick"];
+        }
+        self.viewPropertiesMap[@(viewId)] = @{
+            @"elementContent": title ?: @"",
+            @"params": mutableProps ?: @{},
+            @"isIgnore":@(isIgnore)
+        };
+    } @catch (NSException *exception) {
+        NSLog(@"[ThinkingAnalyticsSDK] error:%@",exception);
     }
 }
 

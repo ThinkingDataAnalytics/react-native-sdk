@@ -1,7 +1,7 @@
 
 Pod::Spec.new do |s|
   s.name         = "RNThinkingData"
-  s.version      = "3.1.0-beta.1"
+  s.version      = "3.2.0"
   s.summary      = "RNThinkingData"
   s.description  = <<-DESC
                   RNThinkingData
@@ -15,7 +15,8 @@ Pod::Spec.new do |s|
   s.source_files  = "ios/**/*.{h,m}"
   s.requires_arc = true
   s.dependency "React"
-  s.dependency "TAGameEngine", '0.4.0'
+  s.dependency "ThinkingSDK", '3.1.1'
+  s.dependency "TAThirdParty", '0.3.5'
 
 end
 

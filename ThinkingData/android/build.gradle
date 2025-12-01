@@ -42,7 +42,6 @@ repositories {
 
 dependencies {
     implementation 'com.facebook.react:react-native:+'
-    api 'cn.thinkingdata.android:ThinkingAnalyticsSDK:3.0.0'
-    api 'cn.thinkingdata.android:TAThirdParty:2.0.0'
-    api 'cn.thinkingdata.android:TAGameEngine:1.2.0'
+    api 'cn.thinkingdata.android:ThinkingAnalyticsSDK:3.1.1'
+    api 'cn.thinkingdata.android:TAThirdParty:2.0.2'
 }

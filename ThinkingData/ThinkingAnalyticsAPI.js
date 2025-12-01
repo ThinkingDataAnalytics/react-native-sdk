@@ -2,11 +2,9 @@ import { NativeModules, Platform } from 'react-native';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-
-
 const { RNThinkingAnalyticsModule } = NativeModules;
 
-const TESDKVERSION = '3.1.0';
+const TESDKVERSION = '3.2.0';
 
 const AutoTrackEventType = {
     APP_START: 'appStart',
@@ -178,19 +176,19 @@ ThinkingAnalyticsAPI.prototype.executeGetDataQueue = async function () {
     }
     taIsClearingForDataQueue = true;
     if (taFlushDataQueue.length > 0) {
-      const eventParams = taFlushDataQueue.shift();
-      try {
-        await this._httpRequest_(eventParams);
-        taIsClearingForDataQueue = false;
-      } catch (error) {
-        console.error(error);
-        taIsClearingForDataQueue = false;
-      }
-      await this.executeGetDataQueue();
+        const eventParams = taFlushDataQueue.shift();
+        try {
+            await this._httpRequest_(eventParams);
+            taIsClearingForDataQueue = false;
+        } catch (error) {
+            console.error(error);
+            taIsClearingForDataQueue = false;
+        }
+        await this.executeGetDataQueue();
     } else {
-      taIsClearingForDataQueue = false;
+        taIsClearingForDataQueue = false;
     }
-  }
+}
 
 
 
@@ -295,7 +293,7 @@ ThinkingAnalyticsAPI.prototype._httpRequest_ = async function (eventData) {
 
         // superProperties
         superProperties = this['ThinkingAnalyticsSource']['super_properties'];
-        if (superProperties !== null && superProperties !== undefined && superProperties !== {} && typeof superProperties === 'object') {
+        if (superProperties !== null && superProperties !== undefined && typeof superProperties === 'object') {
             for (var prop in superProperties) {
                 if (superProperties[prop] !== null && superProperties[prop] !== undefined) {
                     mydata['properties'][prop] = superProperties[prop];
@@ -306,7 +304,7 @@ ThinkingAnalyticsAPI.prototype._httpRequest_ = async function (eventData) {
         // dynamicProperties
         if (this['ThinkingAnalyticsSource']['dynamicProperties'] !== null && this['ThinkingAnalyticsSource']['dynamicProperties'] !== undefined && typeof this['ThinkingAnalyticsSource']['dynamicProperties'] === 'function') {
             dyldSuperProperties = this['ThinkingAnalyticsSource']['dynamicProperties']();
-            if (dyldSuperProperties !== null && dyldSuperProperties !== undefined && dyldSuperProperties !== {} && typeof dyldSuperProperties === 'object') {
+            if (dyldSuperProperties !== null && dyldSuperProperties !== undefined && typeof dyldSuperProperties === 'object') {
                 for (var prop in dyldSuperProperties) {
                     if (dyldSuperProperties[prop] !== void 0) {
                         mydata['properties'][prop] = dyldSuperProperties[prop];
@@ -316,7 +314,7 @@ ThinkingAnalyticsAPI.prototype._httpRequest_ = async function (eventData) {
         }
 
         // merge eventData.properties
-        if (eventData.properties !== null && eventData.properties !== undefined && eventData.properties !== {} && typeof eventData.properties === 'object') {
+        if (eventData.properties !== null && eventData.properties !== undefined && typeof eventData.properties === 'object') {
             for (var prop in eventData.properties) {
                 if (eventData.properties[prop] !== void 0) {
                     mydata['properties'][prop] = eventData.properties[prop];
@@ -363,7 +361,7 @@ ThinkingAnalyticsAPI.prototype._httpRequest_ = async function (eventData) {
                         mydata['properties'][prop][prop1] = this.ta_formatDate(this.ta_formatTimeZone(mydata['properties'][prop][prop1], this['ThinkingAnalyticsSource']['zoneOffset']));
                     }
                 }
-            } 
+            }
         }
 
         // out property
@@ -472,8 +470,8 @@ ThinkingAnalyticsAPI.prototype.formatPropertiesTimeZone = function (properties) 
         return properties;
     }
 
-   // check date type
-   for (var prop in properties) {
+    // check date type
+    for (var prop in properties) {
         if (properties[prop] !== void 0 && properties[prop] instanceof Date) {
             properties[prop] = this.ta_formatDate(this.ta_formatTimeZone(properties[prop], this['ThinkingAnalyticsSource']['zoneOffset']));
         } else if (properties[prop] !== void 0 && properties[prop] instanceof Array) {
@@ -493,11 +491,14 @@ ThinkingAnalyticsAPI.prototype.formatPropertiesTimeZone = function (properties) 
                     properties[prop][prop1] = this.ta_formatDate(this.ta_formatTimeZone(properties[prop][prop1], this['ThinkingAnalyticsSource']['zoneOffset']));
                 }
             }
-        } 
+        }
     }
     return properties;
 }
-
+ThinkingAnalyticsAPI.prototype.getTimeStamp = function (time) {
+    if (time !== undefined && time instanceof Date) return time.getTime();
+    return 0;
+}
 /**
  * track a event
  *
@@ -526,14 +527,13 @@ ThinkingAnalyticsAPI.prototype.track = function (eventName, properties, time, ti
                 properties[key] = dProperties[key];
             }
         }
-       
     }
 
     var obj = {
-        appid: this.appId,
+        appId: this.appId,
         eventName: eventName,
-        properties: this.formatPropertiesTimeZone(properties)       ,
-        time: time,
+        properties: this.formatPropertiesTimeZone(properties),
+        time: this.getTimeStamp(time),
         timeZone: timeZone,
     };
     RNThinkingAnalyticsModule.track(obj);
@@ -570,11 +570,11 @@ ThinkingAnalyticsAPI.prototype.trackFirstEvent = function (eventName, properties
         }
     }
     var obj = {
-        appid: this.appId,
+        appId: this.appId,
         eventName: eventName,
         properties: this.formatPropertiesTimeZone(properties),
         eventId: eventId,
-        time: time,
+        time: this.getTimeStamp(time),
         timeZone: timeZone
     };
     RNThinkingAnalyticsModule.trackFirstEvent(obj);
@@ -612,11 +612,11 @@ ThinkingAnalyticsAPI.prototype.trackUpdate = function (eventName, properties, ev
         }
     }
     var obj = {
-        appid: this.appId,
+        appId: this.appId,
         eventName: eventName,
         properties: this.formatPropertiesTimeZone(properties),
         eventId: eventId,
-        time: time,
+        time: this.getTimeStamp(time),
         timeZone: timeZone
     };
     RNThinkingAnalyticsModule.trackUpdate(obj);
@@ -654,11 +654,11 @@ ThinkingAnalyticsAPI.prototype.trackOverwrite = function (eventName, properties,
         }
     }
     var obj = {
-        appid: this.appId,
+        appId: this.appId,
         eventName: eventName,
         properties: this.formatPropertiesTimeZone(properties),
         eventId: eventId,
-        time: time,
+        time: this.getTimeStamp(time),
         timeZone: timeZone
     };
     RNThinkingAnalyticsModule.trackOverwrite(obj);
@@ -686,7 +686,7 @@ ThinkingAnalyticsAPI.prototype.timeEvent = function (eventName) {
 
 
     var obj = {
-        appid: this.appId,
+        appId: this.appId,
         eventName: eventName
     };
     RNThinkingAnalyticsModule.timeEvent(obj);
@@ -709,7 +709,7 @@ ThinkingAnalyticsAPI.prototype.login = function (loginId) {
     }
 
     var obj = {
-        appid: this.appId,
+        appId: this.appId,
         loginId: loginId
     };
     RNThinkingAnalyticsModule.login(obj);
@@ -730,7 +730,7 @@ ThinkingAnalyticsAPI.prototype.logout = function () {
     }
 
     var obj = {
-        appid: this.appId,
+        appId: this.appId,
     };
     RNThinkingAnalyticsModule.logout(obj);
 }
@@ -750,9 +750,8 @@ ThinkingAnalyticsAPI.prototype.userSet = function (properties) {
         return;
     }
 
-
     var obj = {
-        appid: this.appId,
+        appId: this.appId,
         properties: this.formatPropertiesTimeZone(properties)
     };
     RNThinkingAnalyticsModule.userSet(obj);
@@ -763,14 +762,14 @@ ThinkingAnalyticsAPI.prototype.userSet = function (properties) {
  *
  * @param properties user properties
  */
-ThinkingAnalyticsAPI.prototype.userUnset = function (properties) {
+ThinkingAnalyticsAPI.prototype.userUnset = function (property) {
 
     if (RNThinkingAnalyticsModule === undefined || RNThinkingAnalyticsModule === null) {
         var dic = {};
-        if (properties === null || properties === undefined || typeof properties !== 'string' || properties === "") {
+        if (property === null || property === undefined || typeof property !== 'string' || property === "") {
             dic = {};
         } else {
-            dic[properties] = 0;
+            dic[property] = 0;
         }
         this.httpRequest({
             type: 'user_unset',
@@ -780,8 +779,8 @@ ThinkingAnalyticsAPI.prototype.userUnset = function (properties) {
     }
 
     var obj = {
-        appid: this.appId,
-        properties: this.formatPropertiesTimeZone(properties)
+        appId: this.appId,
+        property: this.formatPropertiesTimeZone(property)
     };
     RNThinkingAnalyticsModule.userUnset(obj);
 }
@@ -802,7 +801,7 @@ ThinkingAnalyticsAPI.prototype.userSetOnce = function (properties) {
     }
 
     var obj = {
-        appid: this.appId,
+        appId: this.appId,
         properties: this.formatPropertiesTimeZone(properties)
     };
     RNThinkingAnalyticsModule.userSetOnce(obj);
@@ -824,7 +823,7 @@ ThinkingAnalyticsAPI.prototype.userAdd = function (properties) {
     }
 
     var obj = {
-        appid: this.appId,
+        appId: this.appId,
         properties: properties
     };
     RNThinkingAnalyticsModule.userAdd(obj);
@@ -844,7 +843,7 @@ ThinkingAnalyticsAPI.prototype.userDel = function () {
     }
 
     var obj = {
-        appid: this.appId
+        appId: this.appId
     };
     RNThinkingAnalyticsModule.userDel(obj);
 }
@@ -865,7 +864,7 @@ ThinkingAnalyticsAPI.prototype.userAppend = function (properties) {
     }
 
     var obj = {
-        appid: this.appId,
+        appId: this.appId,
         properties: this.formatPropertiesTimeZone(properties)
     };
     RNThinkingAnalyticsModule.userAppend(obj);
@@ -887,7 +886,7 @@ ThinkingAnalyticsAPI.prototype.userUniqAppend = function (properties) {
     }
 
     var obj = {
-        appid: this.appId,
+        appId: this.appId,
         properties: this.formatPropertiesTimeZone(properties)
     };
     RNThinkingAnalyticsModule.userUniqAppend(obj);
@@ -908,7 +907,7 @@ ThinkingAnalyticsAPI.prototype.setSuperProperties = function (properties) {
     }
 
     var obj = {
-        appid: this.appId,
+        appId: this.appId,
         properties: this.formatPropertiesTimeZone(properties)
     };
     RNThinkingAnalyticsModule.setSuperProperties(obj);
@@ -939,8 +938,8 @@ ThinkingAnalyticsAPI.prototype.unsetSuperProperty = function (property) {
     }
 
     var obj = {
-        appid: this.appId,
-        properties: property
+        appId: this.appId,
+        property: property
     };
     RNThinkingAnalyticsModule.unsetSuperProperty(obj);
 }
@@ -959,7 +958,7 @@ ThinkingAnalyticsAPI.prototype.clearSuperProperties = function () {
     }
 
     var obj = {
-        appid: this.appId
+        appId: this.appId
     };
     RNThinkingAnalyticsModule.clearSuperProperties(obj);
 }
@@ -981,7 +980,7 @@ ThinkingAnalyticsAPI.prototype.identify = function (distinctId) {
     }
 
     var obj = {
-        appid: this.appId,
+        appId: this.appId,
         distinctId: distinctId
     };
     RNThinkingAnalyticsModule.identify(obj);
@@ -1001,7 +1000,7 @@ ThinkingAnalyticsAPI.prototype.flush = function () {
     }
 
     var obj = {
-        appid: this.appId
+        appId: this.appId
     };
     RNThinkingAnalyticsModule.flush(obj);
 }
@@ -1010,7 +1009,7 @@ ThinkingAnalyticsAPI.prototype.flush = function () {
  * enable auto-tracking
  * @param {*} autoList 
  */
-ThinkingAnalyticsAPI.prototype.enableAutoTrack = function (autoList) {
+ThinkingAnalyticsAPI.prototype.enableAutoTrack = function (autoList,properties) {
 
     if (RNThinkingAnalyticsModule === undefined || RNThinkingAnalyticsModule === null) {
         if (teEnableShowLog) {
@@ -1032,27 +1031,13 @@ ThinkingAnalyticsAPI.prototype.enableAutoTrack = function (autoList) {
         return;
     }
 
-
-    if (Object.prototype.toString.call(autoList) === '[object Array]') {
-        var autoTrackType = {};
-        autoList.forEach(element => {
-            if (element === AutoTrackEventType.APP_START) {
-                autoTrackType.appStart = true;
-            } else if (element === AutoTrackEventType.APP_END) {
-                autoTrackType.appEnd = true;
-            } else if (element === AutoTrackEventType.APP_CRASH) {
-                autoTrackType.appViewCrash = true;
-            } else if (element === AutoTrackEventType.APP_INSTALL) {
-                autoTrackType.appInstall = true;
-            }
-        });
-        var obj = {
-            appid: this.appId,
-            autoTrackType: autoTrackType
-        };
-        console.log(obj);
-        RNThinkingAnalyticsModule.enableAutoTrack(obj);
-    }
+    var obj = {
+        appId: this.appId,
+        autoTrackType: autoList,
+        properties:properties
+    };
+    RNThinkingAnalyticsModule.enableAutoTrack(obj);
+    
 }
 
 /**
@@ -1107,14 +1092,16 @@ ThinkingAnalyticsAPI.prototype.enableThirdPartySharing = function (types, params
     }
 
     var obj = {
-        appid: this.appId
+        appId: this.appId,
+        types: types,
+        params: params
     };
-    if (Object.prototype.toString.call(types) === '[object Array]') {
-        obj.types = types;
-    } else if (Object.prototype.toString.call(types) === '[object String]') {
-        obj.type = types;
-        obj.params = params;
-    }
+    // if (Object.prototype.toString.call(types) === '[object Array]') {
+    //     obj.types = types;
+    // } else if (Object.prototype.toString.call(types) === '[object String]') {
+    //     obj.type = types;
+    //     obj.params = params;
+    // }
     RNThinkingAnalyticsModule.enableThirdPartySharing(obj);
 }
 
@@ -1134,7 +1121,7 @@ ThinkingAnalyticsAPI.prototype.setTrackStatus = function (status) {
     }
 
     var obj = {
-        appid: this.appId,
+        appId: this.appId,
         status: status
     };
     RNThinkingAnalyticsModule.setTrackStatus(obj);
@@ -1166,7 +1153,7 @@ ThinkingAnalyticsAPI.prototype.getPresetProperties = async function () {
     }
 
     var obj = {
-        appid: this.appId
+        appId: this.appId
     };
     return await RNThinkingAnalyticsModule.getPresetProperties(obj);
 }
@@ -1181,7 +1168,7 @@ ThinkingAnalyticsAPI.prototype.getSuperProperties = async function () {
     }
 
     var obj = {
-        appid: this.appId
+        appId: this.appId
     };
     return await RNThinkingAnalyticsModule.getSuperProperties(obj);
 }
@@ -1207,9 +1194,21 @@ ThinkingAnalyticsAPI.prototype.getDistinctId = async function () {
     }
 
     var obj = {
-        appid: this.appId
+        appId: this.appId
     };
     return await RNThinkingAnalyticsModule.getDistinctId(obj);
+}
+
+ThinkingAnalyticsAPI.prototype.getAccountId = async function () {
+
+    if (RNThinkingAnalyticsModule === undefined || RNThinkingAnalyticsModule === null) {
+        return "";
+    }
+
+    var obj = {
+        appId: this.appId
+    };
+    return await RNThinkingAnalyticsModule.getAccountId(obj);
 }
 
 /**

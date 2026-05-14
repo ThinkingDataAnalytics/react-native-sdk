@@ -3,10 +3,9 @@ buildscript {
     repositories {
         google()
         mavenCentral()
-        jcenter()
     }
 
-    def buildGradleVersion = ext.has('buildGradlePluginVersion') ? ext.get('buildGradlePluginVersion') : '3.5.3'
+    def buildGradleVersion = ext.has('buildGradlePluginVersion') ? ext.get('buildGradlePluginVersion') : '7.3.1'
 
     dependencies {
         classpath "com.android.tools.build:gradle:$buildGradleVersion"
@@ -20,19 +19,17 @@ def safeExtGet(prop, fallback) {
 apply plugin: 'com.android.library'
 
 android {
-
-    compileSdkVersion safeExtGet('compileSdkVersion', 28)
-    buildToolsVersion safeExtGet('buildToolsVersion', '28.0.3')
+    namespace 'cn.thinking'
+    
+    compileSdkVersion safeExtGet('compileSdkVersion', 36)
+    buildToolsVersion safeExtGet('buildToolsVersion', '36.0.0')
 
 
     defaultConfig {
         minSdkVersion safeExtGet('minSdkVersion', 16)
-        targetSdkVersion safeExtGet('targetSdkVersion', 28)
+        targetSdkVersion safeExtGet('targetSdkVersion', 36)
         versionCode 1
         versionName "1.0"
-    }
-    lintOptions {
-        abortOnError false
     }
 }
 
